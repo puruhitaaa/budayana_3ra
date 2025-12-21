@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useMutation } from "@tanstack/react-query"
 import MessagePopup from "../../components/MessagePopup.jsx"
 import { authClient } from "../../lib/auth-client"
+import { useInitializeProgress } from "../../hooks/useProgress"
 
 export default function SignIn() {
   const navigate = useNavigate()
@@ -27,6 +28,9 @@ export default function SignIn() {
   const [username, setUsername] = useState("")
   const [guardianEmail, setGuardianEmail] = useState("")
 
+  // Progress initialization hook
+  const initializeProgress = useInitializeProgress()
+
   const registerMutation = useMutation({
     mutationFn: async (formData) => {
       const { data, error } = await authClient.signUp.email({
@@ -43,7 +47,15 @@ export default function SignIn() {
       }
       return data
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Initialize user progress after successful signup
+      try {
+        await initializeProgress.mutateAsync()
+      } catch (e) {
+        // Log but don't fail signup if progress initialization fails
+        console.warn("Progress initialization failed:", e)
+      }
+
       setPopupType("success")
       setPopupMessage("Pendaftaran berhasil! Silakan masuk ya.")
       setPopupOpen(true)
