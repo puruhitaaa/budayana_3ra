@@ -20,13 +20,12 @@ const stories = {
 seorang pemuda bernama Biwar. Ia 
 tinggal di sebuah kampung kecil di tepi 
 hutan. Biwar terkenal pemberani, suka 
-menolong, dan selalu menjaga 
-keluarganya. 
+menolong, dan selalu menjaga keluarganya.
 
-Namun, kehidupan warga kampung 
-sering terganggu oleh makhluk jahat, 
-yaitu seekor naga raksasa yang tinggal 
-di dalam gua besar dekat sungai.`
+Namun, kehidupan warga kampung sering 
+terganggu oleh makhluk jahat, yaitu 
+seekor naga raksasa yang tinggal di 
+dalam gua besar dekat sungai.`
             },
 
             // PAGE 3
@@ -34,8 +33,7 @@ di dalam gua besar dekat sungai.`
                 content: `Naga itu sering datang untuk merusak 
 ladang, memakan hewan ternak, bahkan 
 membuat warga ketakutan. Suatu hari, 
-kepala suku mengumpulkan seluruh 
-warga. 
+kepala suku mengumpulkan seluruh warga.
 
 “Warga semua,” katanya dengan suara 
 sedih, “kita tidak bisa hidup tenang. Naga 
@@ -52,6 +50,7 @@ menghadapi naga itu, Kepala Suku.”
 
 Ibunya terkejut. “Biwar, itu berbahaya 
 sekali!” Biwar tersenyum menenangkan. 
+
 “Ibu, jangan khawatir. Aku akan hati-hati. 
 Aku hanya ingin kampung kita aman.”`
             },
@@ -61,75 +60,61 @@ Aku hanya ingin kampung kita aman.”`
                 content: `Pagi-pagi sekali, Biwar membawa 
 tombak, busur, dan panah. Ia berjalan 
 melewati hutan, menyeberangi sungai, 
-dan menaiki bukit batu. 
+dan menaiki bukit batu.
 
 Saat mendekati gua naga, ia mendengar 
 suara mengerikan. “Grrrrrr… Siapa yang 
-berani datang ke sini?” Suara itu 
-bergema dari dalam gua. Biwar 
-menjawab, “Aku Biwar dari Kampung 
-Wamena! Aku datang untuk menghentikan 
-kejahatanmu!”`
+berani datang ke sini?”`
             },
 
             // PAGE 6
             {
-                content: `Tiba-tiba, naga raksasa keluar dari gua. 
-Sisiknya keras, matanya menyala merah, 
-dan napasnya panas bagaikan api. 
-“Anak kecil sepertimu ingin 
-menantangku?” Naga itu tertawa keras. 
-“Kau tidak akan bisa menang!”
+                content: `Suara itu bergema dari dalam gua. 
+Biwar menjawab, “Aku Biwar dari 
+Kampung Wamena! Aku datang untuk 
+menghentikan kejahatanmu!”
 
-Biwar memegang tombaknya dengan 
-erat. “Aku tidak takut. Aku harus 
-melindungi rakyatku.”`
+Tiba-tiba, naga raksasa keluar dari gua. 
+Sisiknya keras, matanya menyala merah, 
+dan napasnya panas bagaikan api.`
             },
 
             // PAGE 7
             {
-                content: `Naga itu menyerang dengan cepat. Biwar 
+                content: `“Anak kecil sepertimu ingin menantangku?” 
+Naga itu tertawa keras. “Kau tidak akan 
+bisa menang!” Biwar memegang 
+tombaknya dengan erat. “Aku tidak takut.”
+
+Naga itu menyerang dengan cepat. Biwar 
 melompat ke samping, menghindari ekor 
 naga yang menghantam tanah hingga 
-tanah bergetar. 
+tanah bergetar.`
+            },
 
-Biwar memanah tepat ke arah mata 
-naga. “Ini untuk kampungku!”
+            // PAGE 8
+            {
+                content: `Biwar memanah tepat ke arah mata 
+naga. “Ini untuk kampungku!” Anak panah 
+itu mengenai sasaran, membuat naga 
+kesakitan dan berteriak.
 
-Anak panah itu mengenai sasaran, 
-membuat naga kesakitan dan berteriak. 
 “Aaarrrggghhh!” Naga itu mengamuk dan 
 menyemburkan api, tetapi Biwar dengan 
 gesit bersembunyi di balik batu.`
             },
 
-            // PAGE 8
+            // PAGE 9
             {
                 content: `Akhirnya, saat naga mulai lelah, Biwar 
 mendekat dan menusuk jantungnya 
 dengan tombak. Naga itu jatuh ke tanah 
-dan mengeluarkan suara terakhir sebelum 
-tubuhnya berhenti bergerak.
+dan tak bergerak lagi.
 
 Dengan langkah bangga, Biwar kembali 
 ke kampung membawa kabar bahagia. 
 Warga menyambutnya dengan sorak-sorai. 
 “Biwar! Pahlawan kita!”`
-            },
-
-            // PAGE 9
-            {
-                content: `Ibunya memeluknya erat. “Anakku… Ibu 
-bangga sekali padamu.” 
-
-Kepala suku berkata, “Biwar, keberanianmu 
-telah menyelamatkan kita semua. Mulai 
-hari ini, kau akan dikenang sebagai Biwar 
-Sang Penakluk Naga.” 
-
-Biwar tersenyum dan berkata, “Aku hanya 
-melakukan apa yang benar. Kita semua 
-sekarang bisa hidup damai.”`
             },
 
             // PAGE 10 – ENDING PAGE

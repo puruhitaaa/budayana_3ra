@@ -2,7 +2,6 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./index.css";
-import HomePage from "./HomePage.jsx";
 import StoryBookJawa from "./StoryBookJawa.jsx";
 import StoryBookPapua from "./StoryBookPapua.jsx";
 import SulawesiGame from "./SulawesiGame.jsx";
@@ -15,13 +14,15 @@ import PreTestJawa from "./PreTestJawa.jsx";
 import PostTestJawa from "./PostTestJawa.jsx";
 import PreTestPapua from "./PreTestPapua.jsx";
 import PostTestPapua from "./PostTestPapua.jsx";
+import Home from "./Home.jsx";
+import Sign_in from "./Sign_in.jsx";
+import Log_in from "./Log_in.jsx";
+import Profile from "./Profile.jsx";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/homepage" element={<HomePage />} />
         <Route path="/pre-test-sulawesi" element={<PreTestSulawesi />} />
         <Route path="/post-test-sulawesi" element={<PostTestSulawesi />} />
         <Route path="/pre-test-sumatra" element={<PreTestSumatra />} />
@@ -34,6 +35,10 @@ createRoot(document.getElementById("root")).render(
         <Route path="/cerita-rakyat/papua" element={<StoryBookPapua />} />
         <Route path="/sulawesi-game" element={<SulawesiGame />} />
         <Route path="/sumatra-game" element={<SumatraGame />} />
+        <Route path="/signin" element={<Sign_in />} />
+        <Route path="/login" element={<Log_in />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/home" element={<Home />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,
