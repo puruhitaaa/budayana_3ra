@@ -1,7 +1,9 @@
 import "./Sign_Up.css"
 import { useNavigate } from "react-router-dom"
 import { useState } from "react"
+import { useMutation } from "@tanstack/react-query"
 import MessagePopup from "../../components/MessagePopup.jsx"
+import { authClient } from "../../lib/auth-client"
 
 export default function SignIn() {
   const navigate = useNavigate()
@@ -17,6 +19,54 @@ export default function SignIn() {
   // SHOW PASSWORD
   const [passwordValue, setPasswordValue] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+
+  // Form State
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [grade, setGrade] = useState("")
+  const [username, setUsername] = useState("")
+  const [guardianEmail, setGuardianEmail] = useState("")
+
+  const registerMutation = useMutation({
+    mutationFn: async (formData) => {
+      const { data, error } = await authClient.signUp.email({
+        email: formData.email,
+        password: formData.password,
+        name: formData.name,
+        username: formData.username,
+        grade: formData.grade,
+        guardianEmail: formData.guardianEmail,
+      })
+
+      if (error) {
+        throw new Error(error.message || "Pendaftaran gagal, coba lagi ya.")
+      }
+      return data
+    },
+    onSuccess: () => {
+      setPopupType("success")
+      setPopupMessage("Pendaftaran berhasil! Silakan masuk ya.")
+      setPopupOpen(true)
+    },
+    onError: (error) => {
+      // console.error(error)
+      setPopupType("error")
+      setPopupMessage(error.message || "Terjadi kesalahan koneksi ke server.")
+      setPopupOpen(true)
+    },
+  })
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    registerMutation.mutate({
+      email: email,
+      name: name,
+      grade: Number(grade),
+      username: username,
+      password: passwordValue,
+      guardianEmail: guardianEmail,
+    })
+  }
 
   return (
     <div className='signin_page'>
@@ -39,56 +89,29 @@ export default function SignIn() {
       </div>
 
       <div className='signin_form'>
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault()
-
-            const name = document.getElementById("name").value
-            const grade = document.getElementById("kelas").value
-            const username = document.getElementById("username").value
-            const password = passwordValue
-            const emailWali = document.getElementById("emailWali").value
-
-            try {
-              const response = await fetch(
-                "http://localhost:4000/api/auth/register",
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    full_name: name,
-                    grade: grade,
-                    username: username,
-                    password: password,
-                    guardian_email: emailWali,
-                  }),
-                }
-              )
-
-              const data = await response.json()
-
-              if (data.ok) {
-                setPopupType("success")
-                setPopupMessage("Pendaftaran berhasil! Silakan masuk ya.")
-                setPopupOpen(true)
-              } else {
-                setPopupType("error")
-                setPopupMessage(
-                  data.message || "Pendaftaran gagal, coba lagi ya."
-                )
-                setPopupOpen(true)
-              }
-            } catch (err) {
-              console.error(err)
-              setPopupType("error")
-              setPopupMessage("Terjadi kesalahan koneksi ke server.")
-              setPopupOpen(true)
-            }
-          }}
-        >
+        <form onSubmit={handleSubmit}>
           <div className='field'>
             <label htmlFor='name'>Nama</label>
-            <input type='text' id='name' placeholder='Nama Kamu' required />
+            <input
+              type='text'
+              id='name'
+              placeholder='Nama Kamu'
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
+          <div className='field'>
+            <label htmlFor='email'>Email</label>
+            <input
+              type='email'
+              id='email'
+              placeholder='Email Kamu'
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
 
           <div className='field'>
@@ -98,6 +121,8 @@ export default function SignIn() {
               id='kelas'
               placeholder='Kelas Kamu (contoh : 4)'
               required
+              value={grade}
+              onChange={(e) => setGrade(e.target.value)}
             />
           </div>
 
@@ -108,6 +133,8 @@ export default function SignIn() {
               id='username'
               placeholder='Username Kamu'
               required
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
             />
           </div>
 
@@ -136,18 +163,24 @@ export default function SignIn() {
           </div>
 
           <div className='field'>
-            <label htmlFor='emailWali'>Email Wali</label>
+            <label htmlFor='guardianEmail'>Email Wali</label>
             <input
               type='email'
-              id='emailWali'
+              id='guardianEmail'
               placeholder='Email Wali (contoh: emailwali@gmail.com'
               required
+              value={guardianEmail}
+              onChange={(e) => setGuardianEmail(e.target.value)}
             />
           </div>
 
           <div className='submit'>
-            <button type='submit' className='register'>
-              Mulai!
+            <button
+              type='submit'
+              className='register'
+              disabled={registerMutation.isPending}
+            >
+              {registerMutation.isPending ? "Loading..." : "Mulai!"}
             </button>
           </div>
         </form>

@@ -1,23 +1,41 @@
-import "./Sidebar.css";
-import { NavLink, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import "./Sidebar.css"
+import { NavLink, useNavigate } from "react-router-dom"
+import { useState } from "react"
+import { authClient } from "../lib/auth-client"
+import MessagePopup from "./MessagePopup"
 
 export default function Sidebar() {
-  const navigate = useNavigate();
-  const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate()
+  const [isOpen, setIsOpen] = useState(false)
 
-  const handleLogout = () => {
-    navigate("/");
-  };
+  // POPUP MESSAGE
+  const [popupOpen, setPopupOpen] = useState(false)
+  const [popupType, setPopupType] = useState("success")
+  const [popupMessage, setPopupMessage] = useState("")
+
+  const handleLogout = async () => {
+    await authClient.signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          navigate("/login")
+        },
+        onError: (error) => {
+          setPopupType("success")
+          setPopupMessage(error.error.message || "Error during logout.")
+          setPopupOpen(true)
+        },
+      },
+    })
+  }
 
   const toggleSidebar = () => {
-    setIsOpen(!isOpen);
-  };
+    setIsOpen(!isOpen)
+  }
 
   return (
     <>
       {/* Mobile Toggle Button */}
-      <button className="sidebar-toggle-btn" onClick={toggleSidebar}>
+      <button className='sidebar-toggle-btn' onClick={toggleSidebar}>
         {isOpen ? "✕" : "☰"}
       </button>
 
@@ -28,11 +46,11 @@ export default function Sidebar() {
       />
 
       <aside className={`sidebar ${isOpen ? "open" : ""}`}>
-        <div className="sidebar-logo">Budayana</div>
+        <div className='sidebar-logo'>Budayana</div>
 
-        <nav className="sidebar-menu">
+        <nav className='sidebar-menu'>
           <NavLink
-            to="/profile"
+            to='/profile'
             className={({ isActive }) =>
               "sidebar-item" + (isActive ? " active" : "")
             }
@@ -42,7 +60,7 @@ export default function Sidebar() {
           </NavLink>
 
           <NavLink
-            to="/results"
+            to='/results'
             className={({ isActive }) =>
               "sidebar-item" + (isActive ? " active" : "")
             }
@@ -51,11 +69,23 @@ export default function Sidebar() {
             Hasil
           </NavLink>
 
-          <button className="sidebar-item sidebar-logout" onClick={handleLogout}>
+          <button
+            className='sidebar-item sidebar-logout'
+            onClick={handleLogout}
+          >
             Keluar
           </button>
         </nav>
       </aside>
+
+      <MessagePopup
+        open={popupOpen}
+        type={popupType}
+        message={popupMessage}
+        onClose={() => {
+          setPopupOpen(false)
+        }}
+      />
     </>
-  );
+  )
 }
