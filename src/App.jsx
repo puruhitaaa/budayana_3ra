@@ -41,8 +41,11 @@ export default function App() {
             />
           </Route>
 
-          {/* Game: /islands/:islandSlug/game */}
-          <Route path='/islands/:islandSlug/game' element={<GamePage />} />
+          {/* Game: /islands/:islandSlug/story/:storyId/game */}
+          <Route
+            path='/islands/:islandSlug/story/:storyId/game'
+            element={<GamePage />}
+          />
 
           {/* Auth */}
           <Route path='/sign-up' element={<Sign_Up />} />

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react"
 import { useParams, useNavigate, useSearchParams } from "react-router-dom"
 import { ArrowLeft, ArrowRight, Clock } from "lucide-react"
-import { getIslandBySlug, getNextStage } from "../../data/islands"
+import { getIslandBySlug } from "../../data/islands"
 import {
   useStartAttempt,
   useAddStage,
@@ -63,10 +63,12 @@ export default function TestPage({ testType = "pre" }) {
   const addQuestionLog = useAddQuestionLog()
   const updateAttempt = useUpdateAttempt()
 
+  const isResultMode = searchParams.get("result") === "true"
+
   // Component state
   const [answers, setAnswers] = useState({})
   const [timeElapsed, setTimeElapsed] = useState(0)
-  const [showResults, setShowResults] = useState(false)
+  const [showResults, setShowResults] = useState(isResultMode)
   const [score, setScore] = useState(0)
   const [_, setCorrectCount] = useState(0)
   const [showWarning, setShowWarning] = useState(false)
@@ -105,7 +107,10 @@ export default function TestPage({ testType = "pre" }) {
   }, [showResults, attemptStartedAt])
 
   // Start attempt when page loads and storyId is available
+  // Skip if we're in result mode (user is viewing results, not taking test)
   useEffect(() => {
+    if (isResultMode) return // Don't start attempt in result mode
+
     if (storyId && !attemptId) {
       startAttempt.mutate(storyId, {
         onSuccess: (data) => {
@@ -130,7 +135,26 @@ export default function TestPage({ testType = "pre" }) {
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storyId, attemptId])
+  }, [storyId, attemptId, isResultMode])
+
+  // Prevent back navigation when showing results
+  // If user presses back, redirect to home instead of returning to questions
+  useEffect(() => {
+    if (!showResults) return
+
+    const handlePopState = (e) => {
+      e.preventDefault()
+      navigate(`/?island=${islandSlug}`, { replace: true })
+    }
+
+    // Push a dummy state to detect back button
+    window.history.pushState(null, "", window.location.href)
+    window.addEventListener("popstate", handlePopState)
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState)
+    }
+  }, [showResults, navigate, islandSlug])
 
   // State to hold pending logs until questions are loaded
   const [pendingLogs, setPendingLogs] = useState(null)
@@ -247,6 +271,9 @@ export default function TestPage({ testType = "pre" }) {
     setScore(localScore)
     setShowResults(true)
 
+    // Update URL to result mode to prevent re-triggering attempt on refresh
+    setSearchParams({ result: "true" }, { replace: true })
+
     // Save stage completion and mark attempt as finished
     if (attemptId) {
       // 1. Add stage completion record
@@ -280,13 +307,13 @@ export default function TestPage({ testType = "pre" }) {
     }
   }
 
-  const handleContinue = () => {
-    const nextStage = getNextStage(isPreTest ? "pre-test" : "post-test")
-    if (nextStage) {
-      navigate(`/islands/${islandSlug}/${nextStage}`)
-    } else {
-      navigate("/")
-    }
+  const handleBackToHome = () => {
+    // const nextStage = getNextStage(isPreTest ? "pre-test" : "post-test")
+    // if (nextStage) {
+    //   navigate(`/islands/${islandSlug}/${nextStage}`)
+    // } else {
+    navigate(`/?island=${islandSlug}`)
+    // }
   }
 
   // Handle invalid island
@@ -298,7 +325,7 @@ export default function TestPage({ testType = "pre" }) {
             Island not found
           </h1>
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate(`/?island=${islandSlug}`)}
             className='bg-[#F7885E] text-white px-6 py-2 rounded-full font-semibold'
           >
             Back to Home
@@ -403,10 +430,10 @@ export default function TestPage({ testType = "pre" }) {
 
             {/* Continue Button */}
             <button
-              onClick={handleContinue}
+              onClick={handleBackToHome}
               className='bg-[#F7885E] hover:bg-[#e4764c] text-white font-extrabold text-xl md:text-2xl px-12 py-3 md:py-4 rounded-full shadow-lg border-b-4 border-[#c9623d] active:border-b-0 active:translate-y-1 transition-all'
             >
-              Lanjutkan
+              Kembali ke Beranda
             </button>
           </div>
         </div>

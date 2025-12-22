@@ -1,7 +1,11 @@
-import { useState, useMemo } from "react"
-import { useNavigate } from "react-router-dom"
+import { useState, useMemo, useEffect } from "react"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import "./Home.css"
-import { useAttempts, getStoryUnlockStatus } from "../hooks/useAttempts"
+import {
+  useAttempts,
+  getStoryUnlockStatus,
+  getLatestStoryScore,
+} from "../hooks/useAttempts"
 import { useMyProgress } from "../hooks/useProgress"
 import { useIsland } from "../hooks/useIslands"
 
@@ -38,9 +42,14 @@ function ProgressDots({ completed = 0, total = 3 }) {
 }
 
 // Stage Card Component with navigation
-function StageCard({ stage, status, index, onClick }) {
+function StageCard({ stage, status, index, onClick, attempts }) {
   const isLocked = status === "locked"
   const isCompleted = status === "completed"
+
+  const score = useMemo(() => {
+    if (!attempts || !stage.id) return null
+    return getLatestStoryScore(attempts, stage.id)
+  }, [attempts, stage.id])
 
   return (
     <div
@@ -61,6 +70,9 @@ function StageCard({ stage, status, index, onClick }) {
         <div className='stage-order'>Tahap {stage.order}</div>
         {isCompleted && <span className='stage-check'>✓</span>}
       </div>
+      {score !== null && (
+        <div className='stage-score-badge'>Latest score: {score}</div>
+      )}
 
       {isLocked && (
         <div className='stage-lock-overlay'>
@@ -130,6 +142,7 @@ function IslandImage({ island, position, onClick }) {
 
 export default function Home() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [activeIsland, setActiveIsland] = useState(null)
 
   // Fetch user's progress from API
@@ -154,6 +167,33 @@ export default function Home() {
     }
     return []
   }, [progressData])
+
+  // Auto-open island popup from URL param (only on initial load)
+  useEffect(() => {
+    const islandParam = searchParams.get("island")
+    if (islandParam && allIslands.length > 0 && !activeIsland) {
+      const matchedIsland = allIslands.find(
+        (i) => i.slug === islandParam || i.id === islandParam
+      )
+      if (matchedIsland) {
+        // Use setTimeout to avoid synchronous setState in effect warning
+        setTimeout(() => setActiveIsland(matchedIsland), 0)
+      }
+    }
+    // Only run when allIslands changes (i.e., on initial data load)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allIslands])
+
+  // Handle island popup open/close with URL sync
+  const handleOpenIsland = (island) => {
+    setActiveIsland(island)
+    setSearchParams({ island: island.slug }, { replace: true })
+  }
+
+  const handleCloseIsland = () => {
+    setActiveIsland(null)
+    setSearchParams({}, { replace: true })
+  }
 
   // attempts and completed stages logic moved to IslandPopup
 
@@ -224,7 +264,7 @@ export default function Home() {
             key={island.id || island.slug}
             island={island}
             position={position}
-            onClick={() => setActiveIsland(island)}
+            onClick={() => handleOpenIsland(island)}
           />
         )
       })}
@@ -300,10 +340,7 @@ export default function Home() {
 
       {/* POPUP */}
       {activeIsland && (
-        <IslandPopup
-          activeIsland={activeIsland}
-          onClose={() => setActiveIsland(null)}
-        />
+        <IslandPopup activeIsland={activeIsland} onClose={handleCloseIsland} />
       )}
     </div>
   )
@@ -342,7 +379,7 @@ function IslandPopup({ activeIsland, onClose }) {
         const hasStoryBook = islandSlug === "jawa" || islandSlug === "papua"
         route = hasStoryBook
           ? `/islands/${islandSlug}/story`
-          : `/islands/${islandSlug}/game`
+          : `/islands/${islandSlug}/story/${story.id}/game`
       }
 
       return {
@@ -429,6 +466,7 @@ function IslandPopup({ activeIsland, onClose }) {
                       stage={stage}
                       status={status}
                       index={index}
+                      attempts={attempts?.items}
                       onClick={() => handleStageClick(stage, status)}
                     />
                   )

@@ -169,6 +169,32 @@ export function getLatestAttempt(attempts) {
 }
 
 /**
+ * Get the latest score for a specific story
+ */
+export function getLatestStoryScore(attempts, storyId) {
+  if (!attempts?.length || !storyId) return null
+
+  const storyAttempts = attempts.filter(
+    (a) => a.storyId === storyId && a.finishedAt !== null
+  )
+
+  if (storyAttempts.length === 0) return null
+
+  // Get latest by finishedAt
+  const latest = storyAttempts.sort(
+    (a, b) => new Date(b.finishedAt) - new Date(a.finishedAt)
+  )[0]
+
+  // Return the most relevant score
+  if (latest.postTestScore !== null) return Math.round(latest.postTestScore)
+  if (latest.preTestScore !== null) return Math.round(latest.preTestScore)
+  if (latest.totalXpGained > 0) return latest.totalXpGained
+  if (latest.correctInteractiveCnt !== null) return latest.correctInteractiveCnt
+
+  return null
+}
+
+/**
  * Map URL stage to API stage type
  */
 export const stageTypeMap = {

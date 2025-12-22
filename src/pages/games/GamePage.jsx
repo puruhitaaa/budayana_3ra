@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams, useNavigate, useSearchParams } from "react-router-dom"
 import { ArrowLeft, ArrowRight, Clock } from "lucide-react"
-import { getGameByIsland, buildGamePages } from "../../data/games"
-import { getIslandBySlug } from "../../data/islands"
+import { useStory } from "../../hooks/useStories"
+import {
+  useStartAttempt,
+  useAddStage,
+  useAddQuestionLog,
+  useUpdateAttempt,
+} from "../../hooks/useAttempts"
 
 const formatTime = (seconds) => {
   const mins = Math.floor(seconds / 60)
@@ -13,207 +18,417 @@ const formatTime = (seconds) => {
 }
 
 /**
- * Unified Game Page Component
- * Dynamically loads game data based on island slug from URL
+ * Game Page Component
+ * Fetches story data and manages interactive game attempts
  */
 export default function GamePage() {
-  const { islandSlug } = useParams()
+  const { islandSlug, storyId } = useParams()
   const navigate = useNavigate()
 
-  // Get island and game data
-  const island = getIslandBySlug(islandSlug)
-  const game = getGameByIsland(islandSlug)
-  const pages = useMemo(() => (game ? buildGamePages(game) : []), [game])
+  // API Hooks
+  const { data: story, isLoading: isStoryLoading } = useStory(storyId)
+  const startAttempt = useStartAttempt()
+  const addStage = useAddStage()
+  const addQuestionLog = useAddQuestionLog()
+  const updateAttempt = useUpdateAttempt()
 
-  // Component state
-  const [currentPage, setCurrentPage] = useState(1)
+  // Use searchParams to track current page (1-indexed in URL, 0-indexed internally)
+  const [searchParams, setSearchParams] = useSearchParams({ page: "1" })
+  const currentPageIndex = Math.max(
+    0,
+    parseInt(searchParams.get("page") || "1", 10) - 1
+  )
+
+  // Helper to update page in search params
+  const setCurrentPage = (pageIndex) => {
+    // pageIndex is 0-indexed, URL page is 1-indexed
+    setSearchParams({ page: String(pageIndex + 1) }, { replace: true })
+  }
+
+  // State
   const [timeElapsed, setTimeElapsed] = useState(0)
   const [finalTime, setFinalTime] = useState(0)
   const [timerRunning, setTimerRunning] = useState(true)
-  const [xp, setXp] = useState(0)
-  const [answers, setAnswers] = useState({})
-  const [dropZones, setDropZones] = useState(Array(5).fill(null))
-  const [bonusAnswer, setBonusAnswer] = useState("")
-  const [showIncorrectPopup, setShowIncorrectPopup] = useState(false)
-  const [dragIncorrectPositions, setDragIncorrectPositions] = useState([])
-  const [dragCorrectPositions, setDragCorrectPositions] = useState([])
-  const [incorrectAttempts, setIncorrectAttempts] = useState({})
+  const [answers, setAnswers] = useState({}) // { questionId: { isCorrect, choiceIndex, ... } }
+  const [attemptId, setAttemptId] = useState(null)
+  const [attemptStartedAt, setAttemptStartedAt] = useState(null)
   const [showExitWarning, setShowExitWarning] = useState(false)
+  const [showIncorrectPopup, setShowIncorrectPopup] = useState(false)
 
-  const totalXp = game?.totalXp || 100
-  const xpPerQuestion = game?.xpPerQuestion || 20
+  // Drag-drop state: { questionId: [itemId1, itemId2, ...] }
+  const [dragDropOrder, setDragDropOrder] = useState({})
 
-  // Timer
-  useEffect(() => {
-    if (!timerRunning) return
-    const t = setInterval(() => setTimeElapsed((v) => v + 1), 1000)
-    return () => clearInterval(t)
-  }, [timerRunning])
-
-  const awardXp = (questionId) => {
-    const alreadyAwarded = answers[questionId]?.isCorrect
-    if (alreadyAwarded || incorrectAttempts[questionId]) return
-    setXp((prev) => Math.min(totalXp, prev + xpPerQuestion))
-  }
-
-  const handleAnswer = (question, choice) => {
-    const isCorrect = question.correct === choice
-    if (!isCorrect) {
-      setAnswers((prev) => ({
-        ...prev,
-        [question.id]: { choice, isCorrect: false },
-      }))
-      setIncorrectAttempts((prev) => ({ ...prev, [question.id]: true }))
-      setShowIncorrectPopup(true)
-      return
+  // Helper to map API slideType to internal type
+  const getSlideType = (slideType) => {
+    switch (slideType) {
+      case "IMAGE":
+      case "COVER":
+        return "image"
+      case "GAME":
+        return "question"
+      case "ENDING":
+        return "ending"
+      default:
+        return "image" // Default fallback
     }
-    setAnswers((prev) => ({
-      ...prev,
-      [question.id]: { choice, isCorrect: true },
-    }))
-    awardXp(question.id)
   }
 
+  // Combined Pages (Static + Interactive)
+  const pages = useMemo(() => {
+    if (!story) return []
+    const staticSlides =
+      story.staticSlides?.map((s) => ({
+        ...s,
+        type: "story",
+        sortOrder: s.slideNumber,
+      })) || []
+    const interactiveSlides =
+      story.interactiveSlides?.map((s) => ({
+        ...s,
+        type: getSlideType(s.slideType),
+        sortOrder: s.slideNumber,
+      })) || []
+
+    // Combine and sort by slideNumber
+    return [...staticSlides, ...interactiveSlides].sort(
+      (a, b) => a.sortOrder - b.sortOrder
+    )
+  }, [story])
+
+  // Current Page Data
+  const currentPageData = pages[currentPageIndex]
+  const isQuestion = currentPageData?.type === "question"
+  const isStory = currentPageData?.type === "story"
+  const isImage = currentPageData?.type === "image"
+  const isEnding = currentPageData?.type === "ending"
+  const isLastPage = currentPageIndex === pages.length - 1
+  const isResultsPage = currentPageIndex === pages.length // We use index out of bounds for results
+
+  // State for pending logs (when story data isn't loaded yet)
+  const [pendingLogs, setPendingLogs] = useState(null)
+
+  // LocalStorage keys for drag-drop persistence
+  const getDragDropStorageKey = (aId) => `budayana_dragdrop_${aId}`
+
+  // Save drag-drop order to localStorage
+  const saveDragDropToStorage = (order) => {
+    if (!attemptId) return
+    try {
+      localStorage.setItem(
+        getDragDropStorageKey(attemptId),
+        JSON.stringify(order)
+      )
+    } catch (e) {
+      console.warn("Failed to save drag-drop order:", e)
+    }
+  }
+
+  // Load drag-drop order from localStorage
+  const loadDragDropFromStorage = (aId) => {
+    try {
+      const stored = localStorage.getItem(getDragDropStorageKey(aId))
+      if (stored) {
+        return JSON.parse(stored)
+      }
+    } catch (e) {
+      console.warn("Failed to load drag-drop order:", e)
+    }
+    return {}
+  }
+
+  // Clear drag-drop storage (call on finish)
+  const clearDragDropStorage = () => {
+    if (!attemptId) return
+    try {
+      localStorage.removeItem(getDragDropStorageKey(attemptId))
+    } catch (e) {
+      console.warn("Failed to clear drag-drop storage:", e)
+    }
+  }
+
+  // Helper to restore answers from questionLogs
+  const restoreAnswersFromLogs = (logs, storyPages) => {
+    if (!logs || !storyPages?.length) return
+
+    // Get all questions from pages
+    const allQuestions = storyPages
+      .filter((p) => p.type === "question" && p.question)
+      .map((p) => p.question)
+
+    // Group logs by questionId and get the latest one based on answeredAt
+    const latestLogsByQuestion = {}
+    logs.forEach((log) => {
+      const existing = latestLogsByQuestion[log.questionId]
+      if (
+        !existing ||
+        new Date(log.answeredAt) > new Date(existing.answeredAt)
+      ) {
+        latestLogsByQuestion[log.questionId] = log
+      }
+    })
+
+    // Map logs to answers
+    const restoredAnswers = {}
+    allQuestions.forEach((q) => {
+      const log = latestLogsByQuestion[q.id]
+      if (log) {
+        // Find the option index by matching userAnswerText with option text
+        const optionIndex = q.answerOptions?.findIndex(
+          (opt) => opt.optionText === log.userAnswerText
+        )
+        if (optionIndex !== -1) {
+          restoredAnswers[q.id] = {
+            choiceIndex: optionIndex,
+            isCorrect: log.isCorrect,
+            optionId: q.answerOptions[optionIndex]?.id,
+            pending: false,
+          }
+        }
+      }
+    })
+
+    if (Object.keys(restoredAnswers).length > 0) {
+      setAnswers((prev) => ({ ...prev, ...restoredAnswers }))
+    }
+  }
+
+  // Start Attempt
+  useEffect(() => {
+    if (storyId && !attemptId && story?.storyType === "INTERACTIVE") {
+      startAttempt.mutate(storyId, {
+        onSuccess: (data) => {
+          setAttemptId(data.id)
+          setAttemptStartedAt(data.startedAt)
+
+          // Restore previous answers from questionLogs if they exist
+          if (data.questionLogs && data.questionLogs.length > 0) {
+            if (pages.length > 0) {
+              restoreAnswersFromLogs(data.questionLogs, pages)
+            } else {
+              // Store logs temporarily if pages aren't loaded yet
+              setPendingLogs(data.questionLogs)
+            }
+          }
+
+          // Restore drag-drop order from localStorage
+          const storedDragDrop = loadDragDropFromStorage(data.id)
+          if (Object.keys(storedDragDrop).length > 0) {
+            setDragDropOrder(storedDragDrop)
+          }
+        },
+        onError: (err) => console.error("Failed to start attempt", err),
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyId, attemptId, story])
+
+  // Restore answers when pages are loaded and we have pending logs
+  useEffect(() => {
+    if (pendingLogs && pages.length > 0) {
+      restoreAnswersFromLogs(pendingLogs, pages)
+      setPendingLogs(null) // Clear pending logs after processing
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pages, pendingLogs])
+
+  // Timer Logic
+  useEffect(() => {
+    if (!timerRunning || !attemptStartedAt || isResultsPage) return
+
+    const calculateElapsed = () => {
+      const startTime = new Date(attemptStartedAt).getTime()
+      const now = Date.now()
+      const elapsedSeconds = Math.floor(
+        ((max) => (max > 0 ? max : 0))((now - startTime) / 1000)
+      )
+      setTimeElapsed(elapsedSeconds)
+    }
+
+    calculateElapsed()
+    const t = setInterval(calculateElapsed, 1000)
+    return () => clearInterval(t)
+  }, [timerRunning, attemptStartedAt, isResultsPage])
+  // Persist drag-drop order to localStorage on every change
+  useEffect(() => {
+    if (attemptId && Object.keys(dragDropOrder).length > 0) {
+      saveDragDropToStorage(dragDropOrder)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragDropOrder, attemptId])
+
+  // Navigation
   const goNext = () => {
-    if (currentPage === 10) {
-      setCurrentPage(11)
-    } else if (currentPage === 11) {
-      setTimerRunning(false)
-      setFinalTime(timeElapsed)
-      setCurrentPage(12)
-    } else if (currentPage < 10) {
-      setCurrentPage((v) => v + 1)
+    if (isLastPage) {
+      handleFinish()
+    } else {
+      setCurrentPage(currentPageIndex + 1)
     }
   }
 
   const goPrev = () => {
-    if (currentPage === 12) setCurrentPage(11)
-    else if (currentPage === 11) setCurrentPage(10)
-    else if (currentPage > 1) setCurrentPage((v) => v - 1)
+    setCurrentPage(Math.max(0, currentPageIndex - 1))
   }
 
-  const canContinue = () => {
-    if (currentPage % 2 === 1 && currentPage <= 10) return true
-    if (currentPage === 11) return bonusAnswer.trim().length > 0
-    if (currentPage % 2 === 0 && currentPage <= 10) {
-      const question = game?.questions.find((q) => q.page === currentPage)
-      return question && answers[question.id]?.isCorrect
+  // Handle Answer Selection
+  const handleAnswer = (question, choiceIndex) => {
+    // Prevent changing answer if already correct
+    if (answers[question.id]?.isCorrect) return
+
+    const selectedOption = question.answerOptions[choiceIndex]
+
+    // Optimistically set answer as pending (no isCorrect yet)
+    setAnswers((prev) => ({
+      ...prev,
+      [question.id]: {
+        choiceIndex,
+        isCorrect: null, // Will be updated by API response
+        optionId: selectedOption.id,
+        pending: true,
+      },
+    }))
+
+    // API Log - correctness comes from API response
+    if (!attemptId) return
+
+    addQuestionLog.mutate(
+      {
+        attemptId,
+        logData: {
+          questionId: question.id,
+          selectedOptionId: selectedOption.id,
+          attemptCount: 1,
+        },
+      },
+      {
+        onSuccess: (response) => {
+          // Update answer with actual correctness from API
+          setAnswers((prev) => ({
+            ...prev,
+            [question.id]: {
+              choiceIndex,
+              isCorrect: response.isCorrect,
+              optionId: selectedOption.id,
+              pending: false,
+            },
+          }))
+
+          if (!response.isCorrect) {
+            setShowIncorrectPopup(true)
+          }
+        },
+        onError: (err) => {
+          console.error("Failed to log answer:", err)
+          // Reset pending state on error
+          setAnswers((prev) => ({
+            ...prev,
+            [question.id]: {
+              ...prev[question.id],
+              pending: false,
+            },
+          }))
+        },
+      }
+    )
+  }
+
+  // Finish Logic
+  const handleFinish = () => {
+    setTimerRunning(false)
+    setFinalTime(timeElapsed)
+
+    // Calculate Score
+    const totalQuestions = pages.filter((p) => p.type === "question").length
+    const correctCount = Object.values(answers).filter(
+      (a) => a.isCorrect
+    ).length
+    const score = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0
+    const xpGained = Math.floor(score) // Simplified XP logic
+
+    if (attemptId) {
+      // Add Stage
+      addStage.mutate({
+        attemptId,
+        stageData: {
+          stageType: "STORY", // or 'GAME' based on mapping
+          timeSpentSeconds: timeElapsed,
+          xpGained: xpGained,
+        },
+      })
+
+      // Update Attempt (Finish)
+      updateAttempt.mutate({
+        attemptId,
+        data: {
+          finishedAt: new Date().toISOString(),
+          totalTimeSeconds: timeElapsed,
+        },
+      })
     }
-    return true
+
+    // Clear drag-drop localStorage since game is finished
+    clearDragDropStorage()
+
+    setCurrentPage(pages.length) // Go to results
   }
 
-  const currentPageData = pages.find((p) => p.pageNumber === currentPage)
+  // Render Loading
+  if (isStoryLoading)
+    return <div className='text-center p-10'>Memuat permainan...</div>
+  if (!story) return <div className='text-center p-10'>Story not found</div>
 
-  // Handle invalid island/game
-  if (!island || !game) {
-    return (
-      <div className='min-h-screen bg-[#fdf4d7] flex items-center justify-center'>
-        <div className='text-center'>
-          <h1 className='text-2xl font-bold text-[#2c2c2c] mb-4'>
-            Game not found for this island
-          </h1>
-          <button
-            onClick={() => navigate("/")}
-            className='bg-[#F7885E] text-white px-6 py-2 rounded-full font-semibold'
-          >
-            Back to Home
-          </button>
-        </div>
-      </div>
-    )
-  }
+  /* ---------------- RENDER HELPERS ---------------- */
 
-  // Render story page
-  const renderStoryPage = (pageData) => {
-    const imageUrl = game.storyImageMap[pageData.pageNumber]
-    return (
-      <div className='w-full max-w-4xl mx-auto px-2'>
-        <div className='bg-white rounded-[30px] shadow-xl border-[3px] border-[#2c2c2c] overflow-hidden'>
-          <div className='w-full flex items-center justify-center'>
-            {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={`Cerita ${island.name} Halaman ${pageData.pageNumber}`}
-                className='w-full h-auto'
-              />
-            ) : (
-              <div className='text-gray-400 text-lg p-8'>
-                Gambar cerita akan ditampilkan di sini
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Render multiple choice
   const renderMultipleChoice = (question) => {
     const current = answers[question.id]
     const mcColors = ["#BDEBFF", "#CBD2FF", "#FFA5C9", "#F7885E"]
 
     return (
       <div className='grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4'>
-        {question.options.map((opt, idx) => {
-          const isCorrectOption = question.correct === idx
-          const isSelectedWrong =
-            current && !current.isCorrect && current.choice === idx
-          const showResult = current?.isCorrect
-          const showWrongResult = current && !current.isCorrect
+        {question.answerOptions?.map((opt, idx) => {
+          const isSelected = current?.choiceIndex === idx
+          const isPending = current?.pending === true
+          const hasResult =
+            current?.isCorrect !== null && current?.isCorrect !== undefined
+          const isCorrectAnswer = isSelected && current?.isCorrect === true
+          const isWrongAnswer = isSelected && current?.isCorrect === false
 
-          let bgColor = mcColors[idx]
+          let bgColor = mcColors[idx % mcColors.length]
           let opacity = "1"
-          let letterBorderClass = "border-black/20"
+          let borderColor = "#2c2c2c"
 
-          if (showResult && isCorrectOption) letterBorderClass = "border-black"
-          if (showResult) {
-            bgColor = isCorrectOption ? "#9ED772" : "#E9645F"
-            if (!isCorrectOption) opacity = "0.7"
-          } else if (showWrongResult) {
-            if (isSelectedWrong) bgColor = "#E9645F"
-            else {
-              bgColor = "#d1d5db"
-              opacity = "0.6"
+          if (hasResult && isSelected) {
+            if (isCorrectAnswer) {
+              bgColor = "#9ED772" // Correct - green
+            } else if (isWrongAnswer) {
+              bgColor = "#E9645F" // Wrong - red
             }
-          }
-
-          let icon = null
-          if (showResult && isCorrectOption) {
-            icon = (
-              <span className='text-green-700 text-xl md:text-3xl font-bold'>
-                ✓
-              </span>
-            )
-          } else if (showWrongResult && isSelectedWrong) {
-            icon = (
-              <span className='text-red-700 text-xl md:text-3xl font-bold'>
-                ✗
-              </span>
-            )
+          } else if (isPending && isSelected) {
+            bgColor = "#FFD700" // Pending - yellow/gold
+            opacity = "0.8"
+          } else if (hasResult && !isSelected) {
+            opacity = "0.5" // Dim non-selected after answer confirmed
           }
 
           return (
             <button
-              key={idx}
+              key={opt.id}
               onClick={() => handleAnswer(question, idx)}
-              disabled={current?.isCorrect}
+              disabled={current?.isCorrect === true || isPending}
               className='w-full text-left rounded-2xl px-4 py-3 md:px-5 md:py-4 font-semibold shadow-sm transition border-2 relative'
-              style={{
-                backgroundColor: bgColor,
-                opacity,
-                borderColor: "#2c2c2c",
-              }}
+              style={{ backgroundColor: bgColor, opacity, borderColor }}
             >
               <div className='flex items-center gap-2 md:gap-3'>
-                <div
-                  className={`w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/80 border-2 ${letterBorderClass} flex items-center justify-center font-bold flex-shrink-0 text-sm md:text-base`}
-                >
+                <div className='w-8 h-8 rounded-full bg-white/80 border-2 border-black/20 flex items-center justify-center font-bold text-sm'>
                   {String.fromCharCode(65 + idx)}
                 </div>
                 <span className='text-[#1f1f1f] flex-1 text-sm md:text-base'>
-                  {opt}
+                  {opt.optionText}
                 </span>
-                {icon && <div className='flex-shrink-0'>{icon}</div>}
+                {isWrongAnswer && <span>✗</span>}
+                {isCorrectAnswer && <span>✓</span>}
+                {isPending && isSelected && (
+                  <span className='animate-pulse'>...</span>
+                )}
               </div>
             </button>
           )
@@ -222,84 +437,83 @@ export default function GamePage() {
     )
   }
 
-  // Render true/false
-  const renderTrueFalse = (question) => {
-    const current = answers[question.id]
-
-    const renderBtn = (label, value) => {
-      const isCorrect = question.correct === value
-      const isSelectedWrong =
-        current && !current.isCorrect && current.choice === value
-      const showResult = current?.isCorrect
-      const showWrongResult = current && !current.isCorrect
-
-      let bgColor = value ? "#9ED772" : "#E9645F"
-      let opacity = 1
-
-      if (showResult) {
-        bgColor = isCorrect ? "#9ED772" : "#E9645F"
-        if (!isCorrect) opacity = 0.7
-      } else if (showWrongResult) {
-        if (isSelectedWrong) bgColor = "#E9645F"
-        else if (isCorrect) {
-          bgColor = "#9ED772"
-          opacity = 0.7
-        } else {
-          bgColor = "#d1d5db"
-          opacity = 0.6
-        }
-      }
-
-      let icon = null
-      if (showResult && isCorrect) {
-        icon = (
-          <span className='text-green-700 text-xl md:text-3xl font-bold'>
-            ✓
-          </span>
-        )
-      } else if (showWrongResult && isSelectedWrong) {
-        icon = (
-          <span className='text-red-700 text-xl md:text-3xl font-bold'>✗</span>
-        )
-      } else if (showWrongResult && isCorrect) {
-        icon = (
-          <span className='text-green-700 text-xl md:text-3xl font-bold'>
-            ✓
-          </span>
-        )
-      }
-
-      return (
-        <button
-          onClick={() => handleAnswer(question, value)}
-          disabled={current?.isCorrect}
-          className='w-full rounded-2xl px-5 py-3 md:py-4 font-semibold shadow-sm transition text-white border-2 relative flex items-center justify-center min-h-[60px] md:min-h-[72px]'
-          style={{ backgroundColor: bgColor, opacity, borderColor: "#2c2c2c" }}
-        >
-          <span className='text-sm md:text-base'>{label}</span>
-          {icon && (
-            <div className='absolute right-3 md:right-5 flex items-center'>
-              {icon}
-            </div>
-          )}
-        </button>
-      )
-    }
-
-    return (
-      <div className='grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4'>
-        {renderBtn("BENAR", true)}
-        {renderBtn("SALAH", false)}
+  // Renders a story slide (static)
+  const renderStoryPage = (pageData) => (
+    <div className='w-full max-w-4xl mx-auto px-2'>
+      <div className='bg-white rounded-[30px] shadow-xl border-[3px] border-[#2c2c2c] overflow-hidden p-4 md:p-6'>
+        {pageData.imageUrl && (
+          <div className='flex justify-center mb-4'>
+            <img
+              src={pageData.imageUrl}
+              alt='Story'
+              className='max-h-[400px] object-contain rounded-lg'
+            />
+          </div>
+        )}
+        <div className='text-lg font-medium text-[#2c2c2c] text-center'>
+          {pageData.contentText}
+        </div>
       </div>
-    )
-  }
+    </div>
+  )
 
-  // Render drag-drop
+  // Renders an image slide (e.g., IMAGE slideType from interactiveSlides)
+  const renderImagePage = (pageData) => (
+    <div className='w-full max-w-4xl mx-auto px-2'>
+      <div className='bg-white rounded-[30px] shadow-xl border-[3px] border-[#2c2c2c] overflow-hidden'>
+        {pageData.imageUrl ? (
+          <img
+            src={pageData.imageUrl}
+            alt='Interactive Story'
+            className='w-full h-auto'
+          />
+        ) : (
+          <div className='text-center p-8 text-gray-400'>
+            Gambar tidak tersedia
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  // Renders the ending slide
+  const renderEndingPage = () => (
+    <div className='w-full max-w-4xl mx-auto px-2'>
+      <div className='bg-white rounded-[40px] shadow-2xl p-8 md:p-12 border-[3px] border-[#2c2c2c] text-center'>
+        <div className='text-6xl mb-6'>🎉</div>
+        <h2 className='text-3xl font-extrabold text-[#2c2c2c] mb-4'>
+          Cerita Selesai!
+        </h2>
+        <p className='text-lg text-gray-600 mb-6'>
+          Klik "Selesai" untuk melihat hasilmu.
+        </p>
+      </div>
+    </div>
+  )
+
+  // Drag-drop colors
+  const dragColors = ["#BDEBFF", "#F2E686", "#F7885E", "#CCD2FF", "#FFA5C9"]
+
+  // Render Drag-Drop question
   const renderDragDrop = (question) => {
-    const dragColors = ["#BDEBFF", "#F2E686", "#F7885E", "#CCD2FF", "#FFA5C9"]
+    const items = question.metadata?.items || []
+    const correctOrder = question.metadata?.correctOrder || []
+    const questionId = question.id
+    const currentOrder = dragDropOrder[questionId] || []
+    const current = answers[questionId]
+    const hasResult =
+      current?.isCorrect !== null && current?.isCorrect !== undefined
+    const isPending = current?.pending === true
+    const isLocked = current?.isCorrect === true // Only lock when correct
+    const isIncorrect = hasResult && !current?.isCorrect
 
-    const handleDragStart = (e, id) => {
-      e.dataTransfer.setData("text/plain", id)
+    // Get items that haven't been placed yet
+    const availableItems = items.filter(
+      (item) => !currentOrder.includes(item.id)
+    )
+
+    const handleDragStart = (e, itemId) => {
+      e.dataTransfer.setData("text/plain", itemId)
     }
 
     const handleDragOver = (e) => {
@@ -312,62 +526,60 @@ export default function GamePage() {
       const sourceId = e.dataTransfer.getData("text/plain")
       if (!sourceId) return
 
-      const updatedZones = [...dropZones]
-      if (updatedZones[targetIndex]) {
-        const sourceIndex = updatedZones.findIndex((id) => id === sourceId)
-        if (sourceIndex !== -1)
-          updatedZones[sourceIndex] = updatedZones[targetIndex]
-      } else {
-        const sourceIndex = updatedZones.findIndex((id) => id === sourceId)
-        if (sourceIndex !== -1) updatedZones[sourceIndex] = null
-      }
-      updatedZones[targetIndex] = sourceId
-      setDropZones(updatedZones)
-      setDragIncorrectPositions([])
-      setDragCorrectPositions([])
+      setDragDropOrder((prev) => {
+        const order = [...(prev[questionId] || Array(items.length).fill(null))]
+
+        // If dropping from available items (not already in slots)
+        const existingIndex = order.indexOf(sourceId)
+        if (existingIndex !== -1) {
+          // Swap if target already has an item
+          const targetItem = order[targetIndex]
+          order[existingIndex] = targetItem
+        }
+        order[targetIndex] = sourceId
+
+        return { ...prev, [questionId]: order }
+      })
     }
 
-    const handleRemoveFromZone = (index) => {
-      const updatedZones = [...dropZones]
-      updatedZones[index] = null
-      setDropZones(updatedZones)
-      setDragIncorrectPositions([])
-      setDragCorrectPositions([])
+    const handleRemoveFromSlot = (index) => {
+      setDragDropOrder((prev) => {
+        const order = [...(prev[questionId] || [])]
+        order[index] = null
+        return { ...prev, [questionId]: order }
+      })
     }
-
-    const availableItems = question.items.filter(
-      (item) => !dropZones.includes(item.id)
-    )
 
     const handleCheckAnswer = () => {
-      const currentOrder = dropZones.filter((id) => id !== null)
-      if (currentOrder.length !== question.correctOrder.length) {
-        setIncorrectAttempts((prev) => ({ ...prev, [question.id]: true }))
+      const order = dragDropOrder[questionId] || []
+      const filledSlots = order.filter((id) => id !== null)
+
+      if (filledSlots.length !== correctOrder.length) {
         setShowIncorrectPopup(true)
         return
       }
 
-      const incorrectPos = []
-      const correctPos = []
-      dropZones.forEach((itemId, index) => {
-        if (itemId) {
-          if (itemId !== question.correctOrder[index]) incorrectPos.push(index)
-          else correctPos.push(index)
+      // Set pending
+      setAnswers((prev) => ({
+        ...prev,
+        [questionId]: { isCorrect: null, pending: true, order },
+      }))
+
+      // Check locally (since drag-drop doesn't have an API endpoint for checking)
+      // Compare order with correctOrder
+      const isCorrect = order.every((id, idx) => id === correctOrder[idx])
+
+      // Simulate API response delay for consistency
+      setTimeout(() => {
+        setAnswers((prev) => ({
+          ...prev,
+          [questionId]: { isCorrect, pending: false, order },
+        }))
+
+        if (!isCorrect) {
+          setShowIncorrectPopup(true)
         }
-      })
-
-      if (incorrectPos.length > 0) {
-        setDragIncorrectPositions(incorrectPos)
-        setDragCorrectPositions(correctPos)
-        setIncorrectAttempts((prev) => ({ ...prev, [question.id]: true }))
-        setShowIncorrectPopup(true)
-        return
-      }
-
-      setDragIncorrectPositions([])
-      setDragCorrectPositions([0, 1, 2, 3, 4])
-      setAnswers((prev) => ({ ...prev, [question.id]: { isCorrect: true } }))
-      awardXp(question.id)
+      }, 300)
     }
 
     return (
@@ -379,40 +591,49 @@ export default function GamePage() {
             </p>
             <button
               onClick={handleCheckAnswer}
-              disabled={answers[question.id]?.isCorrect}
-              className='px-4 py-2 md:px-5 md:py-3 md:mb-2 rounded-full text-white font-semibold shadow hover:opacity-90 transition text-sm md:text-base disabled:opacity-50 disabled:cursor-not-allowed'
+              disabled={isLocked || isPending}
+              className='px-4 py-2 md:px-5 md:py-3 rounded-full text-white font-semibold shadow hover:opacity-90 transition text-sm md:text-base disabled:opacity-50 disabled:cursor-not-allowed'
               style={{
-                backgroundColor: answers[question.id]?.isCorrect
+                backgroundColor: isLocked
                   ? "#9ED772"
+                  : isPending
+                  ? "#FFD700"
                   : "#4fb986",
               }}
             >
-              {answers[question.id]?.isCorrect
+              {isLocked
                 ? "Jawaban Benar ✓"
+                : isPending
+                ? "Memeriksa..."
+                : isIncorrect
+                ? "Periksa Lagi"
                 : "Periksa Jawaban"}
             </button>
           </div>
 
+          {/* Drop zones */}
           <div className='grid grid-cols-1 md:grid-cols-5 gap-2 md:gap-3'>
-            {Array(5)
+            {Array(items.length)
               .fill(null)
               .map((_, index) => {
-                const itemId = dropZones[index]
-                const item = itemId
-                  ? question.items.find((i) => i.id === itemId)
-                  : null
-                const color = dragColors[index]
-                const isIncorrect = dragIncorrectPositions.includes(index)
-                const isCorrect = dragCorrectPositions.includes(index)
+                const itemId = currentOrder[index]
+                const item = itemId ? items.find((i) => i.id === itemId) : null
+                const color = dragColors[index % dragColors.length]
 
-                let borderColor = "#2c2c2c"
                 let ringClass = ""
-                if (isCorrect) {
-                  borderColor = "#7BC142"
-                  ringClass = "ring-4 ring-green-400"
-                } else if (isIncorrect) {
-                  borderColor = "#E9645F"
-                  ringClass = "ring-4 ring-red-500"
+                let bgStyle = item
+                  ? { backgroundColor: color }
+                  : { backgroundColor: "#f5f5f5" }
+
+                if (hasResult) {
+                  const isCorrectPosition = itemId === correctOrder[index]
+                  if (isCorrectPosition) {
+                    ringClass = "ring-4 ring-green-400"
+                    bgStyle = { backgroundColor: "#d1f2b8" }
+                  } else if (item) {
+                    ringClass = "ring-4 ring-red-500"
+                    bgStyle = { backgroundColor: "#ffcccc" }
+                  }
                 }
 
                 return (
@@ -421,20 +642,11 @@ export default function GamePage() {
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, index)}
                     className={`relative min-h-[100px] md:min-h-[120px] rounded-xl border-2 flex flex-col items-center justify-center p-3 transition ${
-                      item ? "border-solid" : "border-dashed border-gray-300"
-                    } ${ringClass}`}
-                    style={
                       item
-                        ? {
-                            backgroundColor: isIncorrect
-                              ? "#ffcccc"
-                              : isCorrect
-                              ? "#d1f2b8ff"
-                              : color,
-                            borderColor,
-                          }
-                        : { backgroundColor: "#f5f5f5" }
-                    }
+                        ? "border-solid border-[#2c2c2c]"
+                        : "border-dashed border-gray-300"
+                    } ${ringClass}`}
+                    style={bgStyle}
                   >
                     <div className='text-xs font-bold text-gray-500 mb-2'>
                       {index + 1}
@@ -444,13 +656,14 @@ export default function GamePage() {
                         <span className='text-sm font-semibold text-[#1f1f1f] text-center px-2'>
                           {item.label}
                         </span>
-                        <button
-                          onClick={() => handleRemoveFromZone(index)}
-                          disabled={answers[question.id]?.isCorrect}
-                          className='absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center transition disabled:opacity-50 disabled:cursor-not-allowed'
-                        >
-                          ×
-                        </button>
+                        {!isLocked && (
+                          <button
+                            onClick={() => handleRemoveFromSlot(index)}
+                            className='absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center transition'
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <span className='text-xs text-gray-400 text-center'>
@@ -461,37 +674,36 @@ export default function GamePage() {
                 )
               })}
           </div>
-          {dragIncorrectPositions.length > 0 && (
+
+          {isIncorrect && (
             <p className='text-[#E9645F] font-semibold text-sm mt-3'>
               Item yang ditandai merah perlu dipindahkan ke posisi yang tepat.
             </p>
           )}
-          {dragCorrectPositions.length === 5 &&
-            answers[question.id]?.isCorrect && (
-              <p className='text-[#7BC142] font-semibold text-sm mt-3'>
-                Sempurna! Semua urutan sudah benar! ✓
-              </p>
-            )}
+          {isLocked && (
+            <p className='text-[#7BC142] font-semibold text-sm mt-3'>
+              Sempurna! Semua urutan sudah benar! ✓
+            </p>
+          )}
         </div>
 
-        {availableItems.length > 0 && (
+        {/* Available items to drag */}
+        {availableItems.length > 0 && !isLocked && (
           <div>
             <p className='text-sm font-semibold text-[#2c2c2c] mb-3'>
               Pilih kejadian:
             </p>
             <div className='grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3'>
               {availableItems.map((item) => {
-                const originalIndex = question.items.findIndex(
-                  (i) => i.id === item.id
-                )
-                const color = dragColors[originalIndex]
+                const originalIndex = items.findIndex((i) => i.id === item.id)
+                const color = dragColors[originalIndex % dragColors.length]
                 return (
                   <div
                     key={item.id}
                     draggable
                     onDragStart={(e) => handleDragStart(e, item.id)}
-                    className='rounded-xl px-3 py-4 md:px-4 md:py-3 shadow text-center font-semibold cursor-move text-[#1f1f1f] transition hover:scale-105 text-sm border-2'
-                    style={{ backgroundColor: color, borderColor: "#2c2c2c" }}
+                    className='rounded-xl px-3 py-4 md:px-4 md:py-3 shadow text-center font-semibold cursor-move text-[#1f1f1f] transition hover:scale-105 text-sm border-2 border-[#2c2c2c]'
+                    style={{ backgroundColor: color }}
                   >
                     {item.label}
                   </div>
@@ -504,138 +716,114 @@ export default function GamePage() {
     )
   }
 
-  // Render question page
+  // Renders a question slide
   const renderQuestionPage = (pageData) => {
     const question = pageData.question
-    if (!question) return null
-    const questionImage = game.questionImageMap[pageData.pageNumber]
+    if (!question) return <div>Invalid Question Data</div>
+
+    // Determine renderer based on questionType
+    const questionType = question.questionType?.toUpperCase()
+
+    let questionRenderer
+    switch (questionType) {
+      case "DRAG_DROP":
+        questionRenderer = renderDragDrop(question)
+        break
+      case "TRUE_FALSE":
+      case "MCQ":
+      case "MULTIPLE_CHOICE":
+      default:
+        questionRenderer = renderMultipleChoice(question)
+        break
+    }
 
     return (
       <div className='w-full max-w-5xl mx-auto px-2'>
-        <div className='bg-white rounded-[28px] border-[3px] border-[#2c2c2c] shadow-xl p-4 md:p-6 relative'>
-          {questionImage && (
-            <div className='mb-4 md:mb-6 flex justify-center mt-2'>
-              <img
-                src={questionImage}
-                alt={`Pertanyaan ${pageData.pageNumber}`}
-                className='max-w-full h-[250px] md:h-[350px] rounded-lg object-contain'
-              />
-            </div>
-          )}
+        <div className='bg-white rounded-[28px] border-[3px] border-[#2c2c2c] shadow-xl p-4 md:p-6'>
           <div className='mb-4 md:mb-5'>
+            {pageData.imageUrl && (
+              <img
+                src={pageData.imageUrl}
+                alt='Question'
+                className='max-h-[200px] object-contain mx-auto mb-4 rounded-lg'
+              />
+            )}
             <p className='text-base md:text-lg font-semibold text-[#2c2c2c] leading-relaxed'>
-              {question.question}
+              {question.questionText}
             </p>
           </div>
-          {question.type === "mc" && renderMultipleChoice(question)}
-          {question.type === "tf" && renderTrueFalse(question)}
-          {question.type === "drag" && renderDragDrop(question)}
+          {questionRenderer}
         </div>
       </div>
     )
   }
 
-  // Render bonus page
-  const renderBonusPage = () => {
-    const bonusImage = game.questionImageMap.bonus
+  // Results Page
+  const renderResults = () => {
+    const correctCount = Object.values(answers).filter(
+      (a) => a.isCorrect
+    ).length
+    const totalQuestions = pages.filter((p) => p.type === "question").length
+    const score =
+      totalQuestions > 0
+        ? Math.round((correctCount / totalQuestions) * 100)
+        : 100
+
     return (
-      <div className='w-full max-w-5xl mx-auto px-2'>
-        <div className='bg-white rounded-[28px] border-2 border-[#2c2c2c] shadow-xl p-4 md:p-6'>
-          {bonusImage && (
-            <div className='mb-4 md:mb-6 flex justify-center'>
-              <img
-                src={bonusImage}
-                alt='Pertanyaan Bonus'
-                className='max-w-full h-[250px] md:h-[350px] rounded-lg'
-              />
-            </div>
-          )}
-          <div className='text-base md:text-lg font-semibold mb-3 text-[#2c2c2c]'>
-            Isi jawaban untuk menyelesaikan tahap bonus.
+      <div className='w-full max-w-4xl mx-auto px-2'>
+        <div className='bg-white rounded-[40px] shadow-2xl p-6 md:p-10 border-[3px] border-[#2c2c2c] text-center'>
+          <div className='bg-[#E4AE28] text-white font-extrabold text-3xl px-12 py-3 rounded-full shadow-lg mb-8 inline-block'>
+            Selesai!
           </div>
-          <textarea
-            value={bonusAnswer}
-            onChange={(e) => setBonusAnswer(e.target.value)}
-            className='w-full h-32 md:h-40 border-2 border-[#2c2c2c] rounded-2xl p-3 md:p-4 text-base md:text-lg shadow focus:outline-none focus:ring-2 focus:ring-[#4fb986]'
-            placeholder='Tulis jawabanmu di sini...'
-          />
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mb-8'>
+            <div className='bg-[#FF9ECF] rounded-3xl p-6 border-[3px] border-[#2c2c2c]'>
+              <span className='font-bold text-xl'>Waktu</span>
+              <div className='text-3xl font-black'>{formatTime(finalTime)}</div>
+            </div>
+            <div className='bg-[#5ADCB6] rounded-3xl p-6 border-[3px] border-[#2c2c2c]'>
+              <span className='font-bold text-xl'>Nilai</span>
+              <div className='text-3xl font-black'>{score}%</div>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate(`/?island=${islandSlug}`)}
+            className='bg-[#F7885E] text-white font-extrabold text-xl px-12 py-3 rounded-full shadow-lg hover:bg-[#e4764c] transition'
+          >
+            Kembali ke Beranda
+          </button>
         </div>
       </div>
     )
   }
 
-  const getPageLabel = () => {
-    if (currentPage === 11) return "Bonus"
-    if (currentPage === 12) return "Hasil Quiz"
-    return `${currentPage}/10`
-  }
-
-  // Render header
+  // Header
   const renderHeader = () => (
-    <div className='w-full max-w-5xl mx-auto px-2 mb-4 md:mb-6'>
-      <div className='flex items-center justify-between'>
-        <button
-          onClick={() => setShowExitWarning(true)}
-          className='px-4 py-2 md:px-5 md:py-2 bg-white/80 border-2 border-[#2c2c2c] flex items-center gap-2 rounded-full shadow hover:bg-gray-100 transition font-semibold text-sm md:text-base'
-        >
-          <ArrowLeft size={18} /> Kembali
-        </button>
-        <div className='flex items-center gap-2 md:gap-3'>
-          <div className='flex items-center gap-2 bg-white/70 px-4 py-2 rounded-full shadow-sm border-2 border-[#2c2c2c]'>
-            <Clock size={20} className='text-[#2c2c2c]' />
-            <span className='text-[#2c2c2c] font-semibold tracking-[0.12em]'>
-              {formatTime(timeElapsed)}
-            </span>
-          </div>
-          <div className='px-3 py-2 md:px-4 md:py-2 bg-white/85 rounded-full flex gap-2 items-center shadow text-sm md:text-base border-2 border-[#2c2c2c]'>
-            <span className='font-bold' style={{ color: "#E4AE28" }}>
-              XP
-            </span>
-            <span className='font-semibold'>
-              {xp}/{totalXp}
-            </span>
-          </div>
-        </div>
-      </div>
-      <div className='flex justify-center mt-3 md:mt-4'>
-        <span className='text-xl md:text-2xl font-bold text-[#2c2c2c]'>
-          {getPageLabel()}
-        </span>
+    <div className='w-full max-w-5xl mx-auto px-2 mb-6 flex justify-between items-center'>
+      <button
+        onClick={() => setShowExitWarning(true)}
+        className='px-4 py-2 bg-white/80 border-2 border-[#2c2c2c] rounded-full flex gap-2 items-center font-semibold hover:bg-gray-100'
+      >
+        <ArrowLeft size={18} /> Keluar
+      </button>
+      <div className='flex gap-2 bg-white/70 px-4 py-2 rounded-full border-2 border-[#2c2c2c] shadow-sm'>
+        <Clock size={20} />
+        <span className='font-semibold'>{formatTime(timeElapsed)}</span>
       </div>
     </div>
   )
 
-  // Render incorrect popup
+  // Incorrect Popup
   const renderIncorrectPopup = () => {
     if (!showIncorrectPopup) return null
-    const currentQ = game.questions.find((q) => q.page === currentPage)
-    const message =
-      currentQ?.incorrectMessage ||
-      "Uh oh... jawabannya kurang tepat, ayo coba lagi!"
-
-    const handleTryAgain = () => {
-      setAnswers((prev) => {
-        const newAnswers = { ...prev }
-        if (currentQ) delete newAnswers[currentQ.id]
-        return newAnswers
-      })
-      setShowIncorrectPopup(false)
-    }
-
     return (
       <div className='fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4'>
-        <div className='bg-[#fff4d6] w-[90%] max-w-md rounded-3xl border-[3px] border-[#e9c499] shadow-2xl p-6 md:p-8 text-center'>
-          <img
-            src='/assets/budayana/islands/image 90.png'
-            alt='warning'
-            className='w-24 md:w-32 mx-auto mb-3'
-          />
-          <p className='text-base md:text-lg font-semibold text-[#2f2f2f] leading-relaxed mb-4 md:mb-6'>
-            {message}
+        <div className='bg-[#fff4d6] w-[90%] max-w-md rounded-3xl border-[3px] border-[#e9c499] shadow-2xl p-6 text-center'>
+          <p className='text-lg font-semibold text-[#2f2f2f] mb-6'>
+            Jawaban kurang tepat, coba lagi ya!
           </p>
           <button
-            onClick={handleTryAgain}
-            className='w-full bg-[#f88c63] text-white font-bold py-2 md:py-3 rounded-full shadow-md hover:bg-[#e27852] transition text-sm md:text-base'
+            onClick={() => setShowIncorrectPopup(false)}
+            className='w-full bg-[#f88c63] text-white font-bold py-2 rounded-full hover:bg-[#e27852]'
           >
             Coba Lagi
           </button>
@@ -644,83 +832,26 @@ export default function GamePage() {
     )
   }
 
-  // Render result page
-  const renderResultPage = () => {
-    const correctAnswersCount = Object.values(answers).filter(
-      (a) => a.isCorrect
-    ).length
-    const totalQuestions = 5
-
-    return (
-      <div className='w-full max-w-4xl mx-auto px-2'>
-        <div className='bg-white rounded-[40px] shadow-2xl p-6 md:p-10 border-[3px] border-[#2c2c2c] text-center min-h-125 flex flex-col items-center justify-center relative'>
-          <div className='bg-[#E4AE28] text-white font-extrabold text-3xl md:text-4xl px-12 py-3 rounded-full shadow-lg mb-8 border-[3px] border-[#fff4d6] ring-4 ring-[#E4AE28]/30'>
-            Berhasil!
-          </div>
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 w-full mb-8 md:mb-10'>
-            <div className='bg-[#C894E6] rounded-3xl p-6 border-[3px] border-[#2c2c2c] shadow-lg flex flex-col items-center justify-center gap-2 transform hover:scale-105 transition duration-300'>
-              <span className='text-[#2c2c2c] font-extrabold text-xl md:text-2xl'>
-                Quiz
-              </span>
-              <span className='text-[#2c2c2c] font-black text-3xl md:text-4xl'>
-                {correctAnswersCount}/{totalQuestions}
-              </span>
-            </div>
-            <div className='bg-[#FF9ECF] rounded-3xl p-6 border-[3px] border-[#2c2c2c] shadow-lg flex flex-col items-center justify-center gap-2 transform hover:scale-105 transition duration-300'>
-              <span className='text-[#2c2c2c] font-extrabold text-xl md:text-2xl'>
-                Waktu
-              </span>
-              <div className='text-[#2c2c2c] font-black text-xl md:text-xl flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 leading-tight'>
-                <span>{Math.floor((finalTime || timeElapsed) / 60)} Menit</span>
-                <span>{(finalTime || timeElapsed) % 60} Detik</span>
-              </div>
-            </div>
-            <div className='bg-[#5ADCB6] rounded-3xl p-6 border-[3px] border-[#2c2c2c] shadow-lg flex flex-col items-center justify-center gap-2 transform hover:scale-105 transition duration-300'>
-              <span className='text-[#2c2c2c] font-extrabold text-xl md:text-2xl'>
-                Total XP
-              </span>
-              <span className='text-[#2c2c2c] font-black text-3xl md:text-4xl'>
-                {xp} XP
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={() => navigate(`/islands/${islandSlug}/post-test`)}
-            className='bg-[#F7885E] hover:bg-[#e4764c] text-white font-extrabold text-xl md:text-2xl px-12 py-3 md:py-4 rounded-full shadow-lg border-b-4 border-[#c9623d] active:border-b-0 active:translate-y-1 transition-all'
-          >
-            Lanjutkan
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // Exit warning popup
+  // Exit Warning
   const renderExitWarning = () => {
     if (!showExitWarning) return null
     return (
       <div className='fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4'>
-        <div className='bg-[#fff4d6] w-[90%] max-w-md rounded-3xl border-[3px] border-[#e9c499] shadow-2xl p-6 md:p-8 text-center'>
-          <img
-            src='/assets/budayana/islands/image 90.png'
-            alt='warning'
-            className='w-24 md:w-32 mx-auto mb-3'
-          />
-          <p className='text-lg font-semibold text-[#2f2f2f] leading-relaxed mb-6'>
-            Jangan pergi dulu! Progresmu di tahap ini akan hilang kalau kamu
-            berhenti sekarang.
+        <div className='bg-[#fff4d6] w-[90%] max-w-md rounded-3xl border-[3px] border-[#e9c499] shadow-2xl p-6 text-center'>
+          <p className='text-lg font-semibold text-[#2f2f2f] mb-6'>
+            Progresmu akan hilang jika keluar sekarang.
           </p>
           <button
             onClick={() => setShowExitWarning(false)}
-            className='w-full bg-[#f88c63] text-white font-bold py-3 rounded-full shadow-md hover:bg-[#e27852] transition mb-2'
+            className='w-full bg-[#f88c63] text-white font-bold py-3 rounded-full mb-2'
           >
-            Lanjutkan Belajar
+            Lanjutkan Main
           </button>
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate(`/?island=${islandSlug}`)}
             className='text-[#e64c45] font-bold'
           >
-            Akhiri Sesi
+            Keluar
           </button>
         </div>
       </div>
@@ -728,37 +859,37 @@ export default function GamePage() {
   }
 
   return (
-    <div className='min-h-screen bg-[#fdf4d7] flex flex-col px-2 md:px-4 py-4 md:py-8'>
+    <div className='min-h-screen bg-[#fdf4d7] flex flex-col p-4'>
       {renderHeader()}
-      <div className='flex-1 flex items-center justify-center w-full'>
-        {currentPage === 12
-          ? renderResultPage()
-          : currentPage === 11
-          ? renderBonusPage()
-          : currentPageData?.type === "story"
+
+      <div className='flex-1 flex items-center justify-center'>
+        {isResultsPage
+          ? renderResults()
+          : isStory
           ? renderStoryPage(currentPageData)
-          : currentPageData?.type === "question"
+          : isImage
+          ? renderImagePage(currentPageData)
+          : isQuestion
           ? renderQuestionPage(currentPageData)
+          : isEnding
+          ? renderEndingPage()
           : null}
       </div>
 
-      {currentPage <= 11 && (
-        <div className='w-full max-w-5xl mx-auto mt-6 px-2 flex justify-between items-center'>
+      {!isResultsPage && (
+        <div className='w-full max-w-5xl mx-auto mt-6 flex justify-between'>
           <button
             onClick={goPrev}
-            disabled={currentPage === 1}
-            className='flex items-center gap-2 px-5 py-2 md:px-6 md:py-3 rounded-full text-white font-semibold shadow transition disabled:opacity-50 disabled:cursor-not-allowed'
-            style={{ backgroundColor: currentPage === 1 ? "#ccc" : "#f27f68" }}
+            disabled={currentPageIndex === 0}
+            className='flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold transition disabled:opacity-50 disabled:bg-[#ccc] bg-[#f27f68]'
           >
             <ArrowLeft size={20} /> Sebelumnya
           </button>
           <button
             onClick={goNext}
-            disabled={!canContinue()}
-            className='flex items-center gap-2 px-5 py-2 md:px-6 md:py-3 rounded-full text-white font-semibold shadow transition disabled:opacity-50 disabled:cursor-not-allowed'
-            style={{ backgroundColor: canContinue() ? "#4fb986" : "#ccc" }}
+            className='flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold transition bg-[#4fb986]'
           >
-            Berikutnya <ArrowRight size={20} />
+            {isLastPage ? "Selesai" : "Berikutnya"} <ArrowRight size={20} />
           </button>
         </div>
       )}

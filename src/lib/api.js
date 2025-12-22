@@ -136,6 +136,18 @@ export const progressApi = {
 }
 
 /**
+ * API methods for Stories
+ */
+export const storiesApi = {
+  /**
+   * Get story details by ID
+   * @param {string} id
+   * @returns {Promise<object>}
+   */
+  get: (id) => apiRequest(`/stories/${id}`),
+}
+
+/**
  * API methods for Islands
  */
 export const islandsApi = {
