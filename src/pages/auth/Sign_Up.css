@@ -1,0 +1,355 @@
+.signin_page {
+  width: 100vw;
+  min-height: 100vh;
+  background-color: #FEF6DF;
+  position: relative;
+  z-index: 0;
+  overflow-x: hidden;
+  /* Prevent horizontal scroll */
+}
+
+.header_form {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.header_form img {
+  width: 100%;
+  max-width: 380px;
+  /* Fluid width with max limit */
+  height: auto;
+}
+
+.header_form h1 {
+  font-family: Fredoka, sans-serif;
+  color: #955C2E;
+  font-weight: 650;
+  font-size: clamp(1.8rem, 5vw, 2.3rem);
+  /* Responsive font size */
+  margin-bottom: 2px;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.header_form h2 {
+  font-family: Fredoka, sans-serif;
+  color: #967C66;
+  font-weight: 650;
+  font-size: clamp(1.2rem, 4vw, 1.5rem);
+  margin-top: 2px;
+  text-align: center;
+}
+
+.redirect {
+  position: absolute;
+  top: 3%;
+  right: 3%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+
+  font-family: Fredoka, sans-serif;
+  color: #967C66;
+  font-weight: 600;
+  font-size: 1.5rem;
+}
+
+.redirect button {
+  width: 200px;
+  height: 50px;
+  border-radius: 30px;
+  background-color: #955C2E;
+  border: 2px solid #955C2E;
+  font-family: Fredoka, sans-serif;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 1.5rem;
+  transition: background-color 0.2s;
+}
+
+.redirect button:hover {
+  cursor: pointer;
+  background-color: #724723;
+}
+
+.redirect p {
+  margin-bottom: 10px;
+}
+
+.signin_form {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: 0 16px;
+  /* Add padding for small screens */
+  box-sizing: border-box;
+}
+
+form {
+  width: 100%;
+  max-width: 600px;
+  /* Max width instead of fixed width */
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+label {
+  font-family: Fredoka, sans-serif;
+  color: #955C2E;
+  font-weight: 650;
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+input {
+  height: 50px;
+  padding: 4px 16px;
+  border-radius: 10px;
+  font-family: Fredoka, sans-serif;
+  color: #000000;
+  font-weight: 650;
+  font-size: 1.2rem;
+  border: 1px solid #ccc;
+  /* Added border for better visibility */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+input::placeholder {
+  color: #A8A8A8;
+}
+
+.password-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.password-wrapper input {
+  flex: 1;
+}
+
+.password-toggle {
+  padding: 0 14px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid #955c2e;
+  background-color: #ffffff;
+  font-family: Fredoka, sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #955c2e;
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  background-color: #ffe9cc;
+  border: 2px solid #955c2e;
+}
+
+
+.submit {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.submit button {
+  width: 230px;
+  height: 60px;
+  border-radius: 30px;
+  border: 4px solid #ffffff;
+  background-color: #955C2E;
+  color: #ffffff;
+  font-family: Fredoka, sans-serif;
+  font-weight: 600;
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+
+.background {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+  width: 100%;
+}
+
+.animals {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  pointer-events: none;
+  /* Let clicks pass through */
+}
+
+.animals img {
+  height: 330px;
+  max-width: 40vw;
+  /* Prevent overlap on medium screens */
+  object-fit: contain;
+}
+
+.buaya {
+  margin-bottom: 100px;
+}
+
+.harimau {
+  margin-bottom: 80px;
+}
+
+.grass {
+  position: relative;
+  width: 100%;
+}
+
+.rumput {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+
+/* RESPONSIVE */
+
+@media (max-width: 1024px) {
+  .signin_page {
+    padding: 16px;
+  }
+
+  .animals img {
+    height: 260px;
+  }
+}
+
+@media (max-width: 768px) {
+  .signin_page {
+    height: auto;
+    padding: 16px 12px 140px;
+    /* Space for content above footer/background */
+  }
+
+  /* Reposition Redirect button to top for mobile */
+  .redirect {
+    position: static;
+    flex-direction: row;
+    justify-content: center;
+    margin-bottom: 20px;
+    font-size: 1rem;
+    gap: 10px;
+  }
+
+  .redirect p {
+    margin-bottom: 0;
+  }
+
+  .redirect button {
+    width: auto;
+    padding: 0 20px;
+    height: 40px;
+    font-size: 1rem;
+  }
+
+  .signin_form {
+    margin-top: 12px;
+  }
+
+  label {
+    font-size: 1.2rem;
+  }
+
+  input {
+    height: 48px;
+    font-size: 1rem;
+  }
+
+  .submit button {
+    width: 200px;
+    height: 50px;
+    font-size: 1.2rem;
+  }
+
+  .animals img {
+    height: 200px;
+    margin-bottom: 40px;
+    /* Adjust vertical align */
+  }
+}
+
+@media (max-width: 480px) {
+  .header_form img {
+    max-width: 250px;
+  }
+
+  .signin_page {
+    padding-bottom: 60px;
+  }
+
+  .animals {
+    display: none;
+    /* Hide animals on very small screens to save space */
+  }
+
+  .redirect {
+    flex-direction: column;
+  }
+}
+
+/* Large Screens / TV */
+@media (min-width: 1921px) {
+  .header_form h1 {
+    font-size: 3rem;
+  }
+
+  .header_form h2 {
+    font-size: 2rem;
+  }
+
+  .signin_form form {
+    max-width: 800px;
+    /* Allow wider form on huge screens */
+  }
+
+  .field label {
+    font-size: 1.8rem;
+  }
+
+  .field input {
+    height: 60px;
+    font-size: 1.4rem;
+  }
+
+  .submit button {
+    width: 300px;
+    height: 70px;
+    font-size: 1.6rem;
+  }
+
+  .redirect {
+    top: 5%;
+    right: 5%;
+    font-size: 2rem;
+  }
+
+  .redirect button {
+    width: 250px;
+    height: 60px;
+    font-size: 1.8rem;
+  }
+}
