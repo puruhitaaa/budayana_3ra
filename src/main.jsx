@@ -25,24 +25,21 @@ createRoot(document.getElementById("root")).render(
           {/* Home */}
           <Route index element={<Home />} />
 
-          {/* ===== DYNAMIC ISLAND ROUTES ===== */}
-          {/* Pre-test: /islands/:islandSlug/pre-test */}
-          <Route
-            path='/islands/:islandSlug/pre-test'
-            element={<TestPage testType='pre' />}
-          />
-
           {/* Story: /islands/:islandSlug/story */}
-          <Route path='/islands/:islandSlug/story' element={<StoryPage />} />
+          <Route path='/islands/:islandSlug/story'>
+            <Route index element={<StoryPage />} />
+            <Route
+              path=':storyId/pre-test'
+              element={<TestPage testType='pre' />}
+            />
+            <Route
+              path=':storyId/post-test'
+              element={<TestPage testType='post' />}
+            />
+          </Route>
 
           {/* Game: /islands/:islandSlug/game */}
           <Route path='/islands/:islandSlug/game' element={<GamePage />} />
-
-          {/* Post-test: /islands/:islandSlug/post-test */}
-          <Route
-            path='/islands/:islandSlug/post-test'
-            element={<TestPage testType='post' />}
-          />
 
           {/* Auth */}
           <Route path='/sign-up' element={<Sign_Up />} />

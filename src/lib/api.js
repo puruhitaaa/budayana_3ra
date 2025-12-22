@@ -52,11 +52,11 @@ export const attemptsApi = {
 
   /**
    * Get all attempts for the current user
-   * @param {string} [storyId] - Optional filter by story
+   * @param {string} [islandId] - Optional filter by island
    * @returns {Promise<Array>}
    */
-  list: (storyId) =>
-    apiRequest(`/attempts${storyId ? `?storyId=${storyId}` : ""}`),
+  list: (islandId) =>
+    apiRequest(`/attempts${islandId ? `?islandId=${islandId}` : ""}`),
 
   /**
    * Get a specific attempt by ID
@@ -66,9 +66,9 @@ export const attemptsApi = {
   get: (id) => apiRequest(`/attempts/${id}`),
 
   /**
-   * Update an attempt
+   * Update an attempt (mark as finished)
    * @param {string} id
-   * @param {object} data
+   * @param {object} data - { finishedAt, totalTimeSeconds }
    * @returns {Promise<object>}
    */
   update: (id, data) =>
@@ -80,7 +80,7 @@ export const attemptsApi = {
   /**
    * Add a stage completion record
    * @param {string} attemptId
-   * @param {object} stageData - { stageType, timeSpentSeconds, xpGained, score }
+   * @param {object} stageData - { stageType, timeSpentSeconds, xpGained }
    * @returns {Promise<object>}
    */
   addStage: (attemptId, stageData) =>
@@ -92,7 +92,7 @@ export const attemptsApi = {
   /**
    * Add a question attempt log
    * @param {string} attemptId
-   * @param {object} logData - { questionId, selectedAnswer, isCorrect, timeSpentSeconds }
+   * @param {object} logData - { questionId, selectedOptionId, attemptCount }
    * @returns {Promise<object>}
    */
   addLog: (attemptId, logData) =>
@@ -133,4 +133,54 @@ export const progressApi = {
    * @returns {Promise<object>}
    */
   getIslandProgress: (islandId) => apiRequest(`/progress/islands/${islandId}`),
+}
+
+/**
+ * API methods for Islands
+ */
+export const islandsApi = {
+  /**
+   * Get public island details including stories
+   * @param {string} id - Island ID or slug
+   * @returns {Promise<object>}
+   */
+  getIsland: (id) => apiRequest(`/islands/${id}?includeStories=true`),
+}
+
+/**
+ * API methods for Questions
+ */
+export const questionsApi = {
+  /**
+   * Get a paginated list of questions with optional filtering
+   * @param {object} params - Query parameters
+   * @param {string} [params.cursor] - Pagination cursor from previous response
+   * @param {number} [params.limit] - Number of items per page (1-100, default: 20)
+   * @param {string} [params.sortBy] - Field to sort by
+   * @param {string} [params.sortOrder] - 'asc' or 'desc'
+   * @param {string} [params.search] - Search query
+   * @param {string} [params.storyId] - Filter by story ID
+   * @param {string} [params.stageType] - Filter by stage type (PRE_TEST, POST_TEST, INTERACTIVE)
+   * @param {string} [params.questionType] - Filter by question type (MCQ, TRUE_FALSE, DRAG_DROP, ESSAY)
+   * @returns {Promise<{items: Array, nextCursor: string|null, hasMore: boolean, totalCount?: number}>}
+   */
+  list: (params = {}) => {
+    const queryString = new URLSearchParams(
+      Object.entries(params).filter(
+        (entry) => entry[1] !== undefined && entry[1] !== null
+      )
+    ).toString()
+    return apiRequest(`/questions${queryString ? `?${queryString}` : ""}`)
+  },
+
+  /**
+   * Create a new question with optional answer options
+   * @param {object} data - Question data
+   * @returns {Promise<object>}
+   */
+  create: (data) =>
+    apiRequest("/questions", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 }

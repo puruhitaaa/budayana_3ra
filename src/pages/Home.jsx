@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import "./Home.css"
-import { useAttempts, isStageCompleted } from "../hooks/useAttempts"
+import { useAttempts, getStoryUnlockStatus } from "../hooks/useAttempts"
 import { useMyProgress } from "../hooks/useProgress"
+import { useIsland } from "../hooks/useIslands"
 
 // Helper to see if we need special slug handling
 function getIslandSlug(name) {
@@ -21,57 +22,6 @@ const islandPositions = {
   jawa: { left: "30%", top: "70%" },
   bali: { left: "53%", top: "75%" },
   nusa: { left: "60%", top: "72%" },
-}
-
-// Get stages configuration for an island
-function getStagesConfig(islandSlug) {
-  // Jawa and Papua have story book, Sulawesi and Sumatra have interactive game
-  const hasStoryBook = islandSlug === "jawa" || islandSlug === "papua"
-
-  return [
-    {
-      key: "pre-test",
-      title: "Pre-Test",
-      stage: "Stage 1",
-      route: `/islands/${islandSlug}/pre-test`,
-      apiStageType: "PRE_TEST",
-    },
-    {
-      key: hasStoryBook ? "story" : "game",
-      title: hasStoryBook ? "Buku Cerita Rakyat" : "Cerita Rakyat Interaktif",
-      stage: "Stage 2",
-      route: hasStoryBook
-        ? `/islands/${islandSlug}/story`
-        : `/islands/${islandSlug}/game`,
-      apiStageType: "STORY",
-    },
-    {
-      key: "post-test",
-      title: "Post-Test",
-      stage: "Stage 3",
-      route: `/islands/${islandSlug}/post-test`,
-      apiStageType: "POST_TEST",
-    },
-  ]
-}
-
-// Determine stage status based on progress
-function getStageStatus(stageIndex, completedStages) {
-  // Stage is completed if it's in completedStages
-  if (completedStages.includes(stageIndex)) return "completed"
-
-  // Stage is unlocked if all previous stages are completed
-  const allPreviousCompleted = Array.from(
-    { length: stageIndex },
-    (_, i) => i
-  ).every((i) => completedStages.includes(i))
-
-  if (allPreviousCompleted) return "unlocked"
-
-  // Default: first stage is always unlocked
-  if (stageIndex === 0) return "unlocked"
-
-  return "locked"
 }
 
 function ProgressDots({ completed = 0, total = 3 }) {
@@ -108,6 +58,7 @@ function StageCard({ stage, status, index, onClick }) {
 
       <div className='stage-content'>
         <p className='stage-title'>{stage.title}</p>
+        <div className='stage-order'>Tahap {stage.order}</div>
         {isCompleted && <span className='stage-check'>✓</span>}
       </div>
 
@@ -204,31 +155,14 @@ export default function Home() {
     return []
   }, [progressData])
 
-  // Fetch attempts for the active island (story-based)
-  const { data: attempts, isLoading } = useAttempts(activeIsland?.id)
-
-  // Calculate completed stages based on API data
-  const completedStages = useMemo(() => {
-    if (!attempts || !activeIsland) return []
-
-    const completed = []
-    const stagesConfig = getStagesConfig(activeIsland.slug)
-
-    stagesConfig.forEach((stage, index) => {
-      if (isStageCompleted(attempts, stage.apiStageType)) {
-        completed.push(index)
-      }
-    })
-
-    return completed
-  }, [attempts, activeIsland])
+  // attempts and completed stages logic moved to IslandPopup
 
   const goToProfile = () => navigate("/profile")
 
-  const handleStageClick = (stage, status) => {
-    if (status === "locked") return
-    navigate(stage.route)
-  }
+  // const handleStageClick = (stage, status) => {
+  //   if (status === "locked") return
+  //   navigate(stage.route)
+  // }
 
   // Count total completed stories
   const totalCompletedStories = useMemo(() => {
@@ -366,78 +300,161 @@ export default function Home() {
 
       {/* POPUP */}
       {activeIsland && (
-        <div className='popup-overlay' onClick={() => setActiveIsland(null)}>
-          <div
-            className={`popup ${
-              activeIsland.isUnlocked ? "popup-unlocked" : "popup-locked"
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {activeIsland.isUnlocked ? (
-              <div className='unlockedpopup'>
-                {/* Close button */}
-                <button
-                  className='popup-close'
-                  onClick={() => setActiveIsland(null)}
-                >
-                  <img
-                    src='/assets/budayana/islands/close button.png'
-                    className='close-button'
-                    alt='close'
-                  />
-                </button>
+        <IslandPopup
+          activeIsland={activeIsland}
+          onClose={() => setActiveIsland(null)}
+        />
+      )}
+    </div>
+  )
+}
 
-                {/* Title */}
-                <h2 className='popup-title'>{activeIsland.name}</h2>
-                <ProgressDots completed={completedStages.length} total={3} />
+function IslandPopup({ activeIsland, onClose }) {
+  const navigate = useNavigate()
+  // Fetch dynamic island details including stories
+  const { data: islandDetails, isLoading: isIslandLoading } = useIsland(
+    activeIsland.apiIslandId
+  )
 
-                {/* Loading state */}
-                {isLoading && (
-                  <div className='loading-text'>Memuat progress...</div>
-                )}
+  // Fetch attempts for this island
+  const { data: attempts } = useAttempts(activeIsland.apiIslandId)
 
-                {/* Stage Grid */}
-                <div className='stage-grid'>
-                  {getStagesConfig(activeIsland.slug || activeIsland.id).map(
-                    (stage, index) => {
-                      const status = getStageStatus(index, completedStages)
-                      return (
-                        <StageCard
-                          key={stage.key}
-                          stage={stage}
-                          status={status}
-                          index={index}
-                          onClick={() => handleStageClick(stage, status)}
-                        />
-                      )
-                    }
-                  )}
-                </div>
-              </div>
-            ) : (
-              /* LOCKED POPUP */
-              <div className='lockedpopup'>
-                <img
-                  src='/assets/budayana/islands/bocah flip.png'
-                  className='notif-kid'
-                  alt='notif-kid'
-                />
+  const handleStageClick = (stage, status) => {
+    if (status === "locked") return
+    navigate(stage.route)
+  }
 
-                <p className='locked-msg'>
-                  Maaf, cerita ini masih dalam proses pengembangan. Tunggu ya!
-                </p>
+  // Helper to map API stories to stage cards
+  const getDynamicStages = (stories, islandSlug) => {
+    if (!stories) return []
 
-                <button
-                  className='ok-btn'
-                  onClick={() => setActiveIsland(null)}
-                >
-                  Oke!
-                </button>
+    return stories.map((story, index) => {
+      // Determine route based on story type or title keyword
+      let route = ""
+      const lowerTitle = story.title.toLowerCase()
+
+      if (lowerTitle.includes("pre-test")) {
+        route = `/islands/${islandSlug}/story/${story.id}/pre-test`
+      } else if (lowerTitle.includes("post-test")) {
+        route = `/islands/${islandSlug}/story/${story.id}/post-test`
+      } else {
+        // Assume interactive game or story
+        const hasStoryBook = islandSlug === "jawa" || islandSlug === "papua"
+        route = hasStoryBook
+          ? `/islands/${islandSlug}/story`
+          : `/islands/${islandSlug}/game`
+      }
+
+      return {
+        id: story.id,
+        key: story.id,
+        title: story.title,
+        route: route,
+        apiStageType: story.storyType,
+        order: story.order || index + 1,
+      }
+    })
+  }
+
+  const stages = useMemo(() => {
+    if (!islandDetails?.stories) return []
+    return getDynamicStages(
+      islandDetails.stories,
+      activeIsland.slug || activeIsland.id
+    )
+  }, [islandDetails, activeIsland])
+
+  // Calculate story unlock status based on attempts with finishedAt
+  // A story is unlocked if the previous story (lower order) has been finished
+  // Note: attempts API returns { items: [...], nextCursor, hasMore }
+  const storyUnlockStatus = useMemo(() => {
+    if (!islandDetails?.stories) return {}
+    const attemptItems = attempts?.items || []
+    return getStoryUnlockStatus(islandDetails.stories, attemptItems)
+  }, [islandDetails, attempts])
+
+  // Helper to get stage status from the new unlock logic
+  const getStageStatusFromUnlock = (stageId) => {
+    const status = storyUnlockStatus[stageId]
+    if (!status) return "locked"
+    if (status.isFinished) return "completed"
+    if (status.isUnlocked) return "unlocked"
+    return "locked"
+  }
+
+  // Count completed stages for progress dots
+  const completedCount = useMemo(() => {
+    return Object.values(storyUnlockStatus).filter((s) => s.isFinished).length
+  }, [storyUnlockStatus])
+
+  const isLoading = isIslandLoading
+
+  return (
+    <div className='popup-overlay' onClick={onClose}>
+      <div
+        className={`popup ${
+          activeIsland.isUnlocked ? "popup-unlocked" : "popup-locked"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {activeIsland.isUnlocked ? (
+          <div className='unlockedpopup'>
+            {/* Close button */}
+            <button className='popup-close' onClick={onClose}>
+              <img
+                src='/assets/budayana/islands/close button.png'
+                className='close-button'
+                alt='close'
+              />
+            </button>
+
+            {/* Title */}
+            <h2 className='popup-title'>{activeIsland.name}</h2>
+            <ProgressDots
+              completed={completedCount}
+              total={stages.length || 3}
+            />
+
+            {/* Loading state */}
+            {isLoading && <div className='loading-text'>Memuat cerita...</div>}
+
+            {/* Stage Grid */}
+            {!isLoading && (
+              <div className='stage-grid'>
+                {stages.map((stage, index) => {
+                  const status = getStageStatusFromUnlock(stage.id)
+                  return (
+                    <StageCard
+                      key={stage.key}
+                      stage={stage}
+                      status={status}
+                      index={index}
+                      onClick={() => handleStageClick(stage, status)}
+                    />
+                  )
+                })}
               </div>
             )}
           </div>
-        </div>
-      )}
+        ) : (
+          /* LOCKED POPUP */
+          <div className='lockedpopup'>
+            <img
+              src='/assets/budayana/islands/bocah flip.png'
+              className='notif-kid'
+              alt='notif-kid'
+            />
+
+            <p className='locked-msg'>
+              Maaf, cerita ini masih dalam proses pengembangan. Tunggu ya!
+            </p>
+
+            <button className='ok-btn' onClick={onClose}>
+              Oke!
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

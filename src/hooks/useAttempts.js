@@ -6,19 +6,19 @@ import { attemptsApi } from "../lib/api"
  */
 const attemptKeys = {
   all: ["attempts"],
-  list: (storyId) => [...attemptKeys.all, "list", storyId],
+  list: (islandId) => [...attemptKeys.all, "list", islandId],
   detail: (id) => [...attemptKeys.all, "detail", id],
 }
 
 /**
- * Hook to fetch attempts for a story
- * @param {string} storyId
+ * Hook to fetch attempts for an island
+ * @param {string} islandId
  */
-export function useAttempts(storyId) {
+export function useAttempts(islandId) {
   return useQuery({
-    queryKey: attemptKeys.list(storyId),
-    queryFn: () => attemptsApi.list(storyId),
-    enabled: !!storyId,
+    queryKey: attemptKeys.list(islandId),
+    queryFn: () => attemptsApi.list(islandId),
+    enabled: !!islandId,
   })
 }
 
@@ -102,6 +102,57 @@ export function isStageCompleted(attempts, stageType) {
   return attempts.some((attempt) =>
     attempt.stages?.some((stage) => stage.stageType === stageType)
   )
+}
+
+/**
+ * Check if a specific story has been finished (has an attempt with finishedAt)
+ * @param {array} attempts - List of attempts from API
+ * @param {string} storyId - The story ID to check
+ * @returns {boolean}
+ */
+export function isStoryFinished(attempts, storyId) {
+  if (!attempts?.length || !storyId) return false
+
+  return attempts.some(
+    (attempt) => attempt.storyId === storyId && attempt.finishedAt !== null
+  )
+}
+
+/**
+ * Get the unlock status for each story based on sequential completion
+ * A story is unlocked if:
+ * - It's the first story (order 1), OR
+ * - The previous story (lower order) has been finished
+ *
+ * @param {array} stories - Array of stories with id and order properties
+ * @param {array} attempts - List of attempts from API
+ * @returns {object} - Map of storyId to { isUnlocked: boolean, isFinished: boolean }
+ */
+export function getStoryUnlockStatus(stories, attempts) {
+  if (!stories?.length) return {}
+
+  // Sort stories by order
+  const sortedStories = [...stories].sort((a, b) => a.order - b.order)
+
+  const statusMap = {}
+
+  sortedStories.forEach((story, index) => {
+    const isFinished = isStoryFinished(attempts, story.id)
+
+    // First story is always unlocked
+    if (index === 0) {
+      statusMap[story.id] = { isUnlocked: true, isFinished }
+      return
+    }
+
+    // Check if previous story is finished
+    const previousStory = sortedStories[index - 1]
+    const previousFinished = isStoryFinished(attempts, previousStory.id)
+
+    statusMap[story.id] = { isUnlocked: previousFinished, isFinished }
+  })
+
+  return statusMap
 }
 
 /**

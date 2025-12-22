@@ -1,33 +1,69 @@
-import { useEffect, useState } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useEffect, useState, useMemo } from "react"
+import { useParams, useNavigate, useSearchParams } from "react-router-dom"
 import { ArrowLeft, ArrowRight, Clock } from "lucide-react"
 import { getIslandBySlug, getNextStage } from "../../data/islands"
-import { getQuestionsByIsland } from "../../data/questions"
 import {
   useStartAttempt,
   useAddStage,
-  stageTypeMap,
+  useAddQuestionLog,
+  useUpdateAttempt,
 } from "../../hooks/useAttempts"
+import { useQuestions } from "../../hooks/useQuestions"
 
 /**
  * Unified Test Page Component
  * Handles both pre-test and post-test based on testType prop
- * Dynamically loads questions based on island slug from URL
+ * Dynamically loads questions based on storyId and stageType from URL
  */
 export default function TestPage({ testType = "pre" }) {
-  const { islandSlug } = useParams()
+  const { islandSlug, storyId } = useParams()
   const navigate = useNavigate()
 
-  // Get island and questions data
+  // Use searchParams to track current page (1-indexed in URL, 0-indexed internally)
+  const [searchParams, setSearchParams] = useSearchParams({ page: "1" })
+  const currentQuestion = Math.max(
+    0,
+    parseInt(searchParams.get("page") || "1", 10) - 1
+  )
+
+  // Get island data (for display purposes)
   const island = getIslandBySlug(islandSlug)
-  const questions = getQuestionsByIsland(islandSlug)
+
+  // Determine stage type for API
+  const stageType = testType === "pre" ? "PRE_TEST" : "POST_TEST"
+
+  // Fetch questions from API
+  const {
+    data: questionsData,
+    isLoading: isQuestionsLoading,
+    error: questionsError,
+  } = useQuestions({
+    storyId,
+    stageType,
+    public: true,
+  })
+
+  // Transform API questions to component format
+  const questions = useMemo(() => {
+    if (!questionsData?.items) return []
+
+    return questionsData.items.map((q) => ({
+      id: q.id,
+      question: q.questionText,
+      options: q.answerOptions?.map((opt) => opt.optionText) || [],
+      optionIds: q.answerOptions?.map((opt) => opt.id) || [], // Keep option IDs for logging
+      correctAnswer: q.answerOptions?.findIndex((opt) => opt.isCorrect) ?? -1,
+      xpValue: q.xpValue || 0,
+    }))
+  }, [questionsData])
 
   // API hooks
   const startAttempt = useStartAttempt()
   const addStage = useAddStage()
+  const addQuestionLog = useAddQuestionLog()
+  const updateAttempt = useUpdateAttempt()
 
   // Component state
-  const [currentQuestion, setCurrentQuestion] = useState(0)
   const [answers, setAnswers] = useState({})
   const [timeElapsed, setTimeElapsed] = useState(0)
   const [showResults, setShowResults] = useState(false)
@@ -35,6 +71,7 @@ export default function TestPage({ testType = "pre" }) {
   const [_, setCorrectCount] = useState(0)
   const [showWarning, setShowWarning] = useState(false)
   const [attemptId, setAttemptId] = useState(null)
+  const [attemptStartedAt, setAttemptStartedAt] = useState(null)
 
   // Get display info
   const isPreTest = testType === "pre"
@@ -48,19 +85,44 @@ export default function TestPage({ testType = "pre" }) {
   const accent = theme?.accent || "#0e7794"
   const contentBg = theme?.contentBg || "#f2f7ff"
 
-  // Timer
+  // Timer - calculates elapsed time from attempt's startedAt timestamp
   useEffect(() => {
-    if (showResults) return
-    const timer = setInterval(() => setTimeElapsed((prev) => prev + 1), 1000)
-    return () => clearInterval(timer)
-  }, [showResults])
+    if (showResults || !attemptStartedAt) return
 
-  // Start attempt when page loads
+    const calculateElapsed = () => {
+      const startTime = new Date(attemptStartedAt).getTime()
+      const now = Date.now()
+      const elapsedSeconds = Math.floor((now - startTime) / 1000)
+      setTimeElapsed(Math.max(0, elapsedSeconds))
+    }
+
+    // Calculate immediately
+    calculateElapsed()
+
+    // Then update every second
+    const timer = setInterval(calculateElapsed, 1000)
+    return () => clearInterval(timer)
+  }, [showResults, attemptStartedAt])
+
+  // Start attempt when page loads and storyId is available
   useEffect(() => {
-    if (island?.id && !attemptId) {
-      startAttempt.mutate(island.id, {
+    if (storyId && !attemptId) {
+      startAttempt.mutate(storyId, {
         onSuccess: (data) => {
           setAttemptId(data.id)
+          setAttemptStartedAt(data.startedAt) // Capture startedAt from API response
+
+          // Restore previous answers from questionLogs if they exist
+          if (
+            data.questionLogs &&
+            data.questionLogs.length > 0 &&
+            questions.length > 0
+          ) {
+            restoreAnswersFromLogs(data.questionLogs)
+          } else if (data.questionLogs && data.questionLogs.length > 0) {
+            // Store logs temporarily if questions aren't loaded yet
+            setPendingLogs(data.questionLogs)
+          }
         },
         onError: (error) => {
           console.error("Failed to start attempt:", error)
@@ -68,7 +130,55 @@ export default function TestPage({ testType = "pre" }) {
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [island?.id, attemptId])
+  }, [storyId, attemptId])
+
+  // State to hold pending logs until questions are loaded
+  const [pendingLogs, setPendingLogs] = useState(null)
+
+  // Helper to restore answers from questionLogs
+  const restoreAnswersFromLogs = (logs) => {
+    if (!logs || !questions.length) return
+
+    // Group logs by questionId and get the latest one based on answeredAt
+    const latestLogsByQuestion = {}
+    logs.forEach((log) => {
+      const existing = latestLogsByQuestion[log.questionId]
+      if (
+        !existing ||
+        new Date(log.answeredAt) > new Date(existing.answeredAt)
+      ) {
+        latestLogsByQuestion[log.questionId] = log
+      }
+    })
+
+    // Map logs to answer indices
+    const restoredAnswers = {}
+    questions.forEach((q, questionIndex) => {
+      const log = latestLogsByQuestion[q.id]
+      if (log) {
+        // Find the option index by matching userAnswerText with option text
+        const optionIndex = q.options.findIndex(
+          (optText) => optText === log.userAnswerText
+        )
+        if (optionIndex !== -1) {
+          restoredAnswers[questionIndex] = optionIndex
+        }
+      }
+    })
+
+    if (Object.keys(restoredAnswers).length > 0) {
+      setAnswers((prev) => ({ ...prev, ...restoredAnswers }))
+    }
+  }
+
+  // Restore answers when questions are loaded and we have pending logs
+  useEffect(() => {
+    if (pendingLogs && questions.length > 0) {
+      restoreAnswersFromLogs(pendingLogs)
+      setPendingLogs(null) // Clear pending logs after processing
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questions, pendingLogs])
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60)
@@ -76,38 +186,95 @@ export default function TestPage({ testType = "pre" }) {
     return `${String(mins).padStart(2, "0")} : ${String(secs).padStart(2, "0")}`
   }
 
+  // Helper to update page in search params
+  const setCurrentPage = (pageIndex) => {
+    // pageIndex is 0-indexed, URL page is 1-indexed
+    setSearchParams({ page: String(pageIndex + 1) }, { replace: true })
+  }
+
+  // Helper to log current question answer to API
+  const logCurrentAnswer = () => {
+    const selectedIndex = answers[currentQuestion]
+    if (selectedIndex === undefined || !attemptId) return
+
+    const currentQ = questions[currentQuestion]
+    if (!currentQ) return
+
+    const selectedOptionId = currentQ.optionIds[selectedIndex]
+    if (!selectedOptionId) return
+
+    addQuestionLog.mutate({
+      attemptId,
+      logData: {
+        questionId: currentQ.id,
+        selectedOptionId,
+        attemptCount: 1,
+      },
+    })
+  }
+
   const handleAnswerSelect = (index) =>
     setAnswers({ ...answers, [currentQuestion]: index })
 
-  const handleNext = () =>
-    setCurrentQuestion((prev) => Math.min(prev + 1, questions.length - 1))
+  const handleNext = () => {
+    // Log the answer before moving to next question
+    logCurrentAnswer()
+    const nextPage = Math.min(currentQuestion + 1, questions.length - 1)
+    setCurrentPage(nextPage)
+  }
 
   const handleExit = () => {
     setShowWarning(true)
   }
 
   const handlePrevQuestion = () => {
-    setCurrentQuestion((prev) => Math.max(0, prev - 1))
+    // Log the answer before moving to previous question
+    logCurrentAnswer()
+    const prevPage = Math.max(0, currentQuestion - 1)
+    setCurrentPage(prevPage)
   }
 
   const handleFinish = async () => {
+    // Log the last question's answer before finishing
+    logCurrentAnswer()
+
     let correct = 0
     questions.forEach((q, i) => answers[i] === q.correctAnswer && correct++)
     setCorrectCount(correct)
-    const finalScore = (correct / questions.length) * 100
-    setScore(finalScore)
+
+    // Set initial local score (will be updated with API response)
+    const localScore = (correct / questions.length) * 100
+    setScore(localScore)
     setShowResults(true)
 
-    // Save stage completion to API
+    // Save stage completion and mark attempt as finished
     if (attemptId) {
-      const stageType = stageTypeMap[isPreTest ? "pre-test" : "post-test"]
-      addStage.mutate({
+      // 1. Add stage completion record
+      addStage.mutate(
+        {
+          attemptId,
+          stageData: {
+            stageType: stageType, // PRE_TEST or POST_TEST
+            timeSpentSeconds: timeElapsed,
+            xpGained: Math.floor((correct / questions.length) * 50),
+          },
+        },
+        {
+          onSuccess: (data) => {
+            // Update score with the percentage from API response (0-100)
+            if (data?.score !== undefined) {
+              setScore(data.score)
+            }
+          },
+        }
+      )
+
+      // 2. Mark attempt as finished
+      updateAttempt.mutate({
         attemptId,
-        stageData: {
-          stageType,
-          timeSpentSeconds: timeElapsed,
-          score: finalScore,
-          xpGained: Math.floor((correct / questions.length) * 50),
+        data: {
+          finishedAt: new Date().toISOString(),
+          totalTimeSeconds: timeElapsed,
         },
       })
     }
@@ -130,6 +297,64 @@ export default function TestPage({ testType = "pre" }) {
           <h1 className='text-2xl font-bold text-[#2c2c2c] mb-4'>
             Island not found
           </h1>
+          <button
+            onClick={() => navigate("/")}
+            className='bg-[#F7885E] text-white px-6 py-2 rounded-full font-semibold'
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Handle loading state
+  if (isQuestionsLoading) {
+    return (
+      <div className='min-h-screen bg-[#fdf4d7] flex items-center justify-center'>
+        <div className='text-center'>
+          <div className='animate-spin rounded-full h-16 w-16 border-b-4 border-[#0e7794] mx-auto mb-4'></div>
+          <p className='text-xl font-semibold text-[#2c2c2c]'>
+            Memuat pertanyaan...
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Handle error state
+  if (questionsError) {
+    return (
+      <div className='min-h-screen bg-[#fdf4d7] flex items-center justify-center'>
+        <div className='text-center'>
+          <h1 className='text-2xl font-bold text-[#e64c45] mb-4'>
+            Gagal memuat pertanyaan
+          </h1>
+          <p className='text-[#2c2c2c] mb-6'>
+            {questionsError.message || "Terjadi kesalahan. Silakan coba lagi."}
+          </p>
+          <button
+            onClick={() => navigate("/")}
+            className='bg-[#F7885E] text-white px-6 py-2 rounded-full font-semibold'
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Handle empty questions
+  if (!questions.length) {
+    return (
+      <div className='min-h-screen bg-[#fdf4d7] flex items-center justify-center'>
+        <div className='text-center'>
+          <h1 className='text-2xl font-bold text-[#2c2c2c] mb-4'>
+            Tidak ada pertanyaan
+          </h1>
+          <p className='text-[#5a5a5a] mb-6'>
+            Belum ada pertanyaan untuk test ini.
+          </p>
           <button
             onClick={() => navigate("/")}
             className='bg-[#F7885E] text-white px-6 py-2 rounded-full font-semibold'
@@ -171,7 +396,7 @@ export default function TestPage({ testType = "pre" }) {
                   Nilai
                 </span>
                 <span className='text-[#2c2c2c] font-black text-3xl md:text-4xl'>
-                  {Math.round(score)}/100
+                  {Math.round(score)}%
                 </span>
               </div>
             </div>
