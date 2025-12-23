@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 // Components
 import BackgroundMusic from "./components/BackgroundMusic.jsx"
+import ProtectedRoute from "./components/auth/ProtectedRoute.jsx"
+import GuestRoute from "./components/auth/GuestRoute.jsx"
 
 // Core pages
 import Home from "./pages/Home.jsx"
@@ -28,38 +30,45 @@ export default function App() {
         <BackgroundMusic />
 
         <Routes>
-          {/* Home */}
-          <Route index element={<Home />} />
+          {/* ========================================
+              PROTECTED ROUTES - Requires authentication
+              ======================================== */}
+          <Route element={<ProtectedRoute />}>
+            {/* Home */}
+            <Route index element={<Home />} />
 
-          {/* Story: /islands/:islandSlug/story */}
-          <Route path='/islands/:islandSlug/story'>
-            <Route index element={<StoryPage />} />
+            {/* Story routes */}
+            <Route path='/islands/:islandSlug/story'>
+              <Route index element={<StoryPage />} />
+              <Route
+                path=':storyId/pre-test'
+                element={<TestPage testType='pre' />}
+              />
+              <Route
+                path=':storyId/post-test'
+                element={<TestPage testType='post' />}
+              />
+            </Route>
+
+            {/* Game route */}
             <Route
-              path=':storyId/pre-test'
-              element={<TestPage testType='pre' />}
+              path='/islands/:islandSlug/story/:storyId/game'
+              element={<GamePage />}
             />
-            <Route
-              path=':storyId/post-test'
-              element={<TestPage testType='post' />}
-            />
-          </Route>
 
-          {/* Game: /islands/:islandSlug/story/:storyId/game */}
-          <Route
-            path='/islands/:islandSlug/story/:storyId/game'
-            element={<GamePage />}
-          />
-
-          {/* Auth */}
-          <Route path='/sign-up' element={<Sign_Up />} />
-          <Route path='/login' element={<Log_in />} />
-
-          {/* Profile */}
-          <Route path='/profile'>
-            <Route element={<ProfileLayout />}>
+            {/* Profile routes with nested layout */}
+            <Route path='/profile' element={<ProfileLayout />}>
               <Route index element={<Profile />} />
               <Route path='results' element={<Results />} />
             </Route>
+          </Route>
+
+          {/* ========================================
+              GUEST ROUTES - Redirect if already logged in
+              ======================================== */}
+          <Route element={<GuestRoute />}>
+            <Route path='/sign-up' element={<Sign_Up />} />
+            <Route path='/login' element={<Log_in />} />
           </Route>
         </Routes>
       </BrowserRouter>
