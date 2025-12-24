@@ -1,27 +1,46 @@
-/* flipbook.css - basic styles for turn.js pages */
+/* flipbook.css - Premium styles for turn.js flipbook */
 
-/* container */
+/* Container */
 .flipbook {
   margin: 0 auto;
-  /* turn.js will set width/height via JS; we still provide max width for layout */
   max-width: 1200px;
+  filter: drop-shadow(0 25px 50px rgba(0, 0, 0, 0.25));
 }
 
-/* each page */
+/* Each page - Premium paper texture */
 .flipbook .page {
-  background: #f8f2e7;
-  border-radius: 18px;
-  border: 1px solid #e2d1b3;
-  box-shadow: 0 12px 28px rgba(0,0,0,0.18);
+  background: linear-gradient(135deg, #fffef9 0%, #fff9e8 100%);
+  border-radius: 0;
+  border: none;
+  box-shadow: inset 0 0 60px rgba(139, 115, 85, 0.1),
+    0 8px 24px rgba(0, 0, 0, 0.12);
   overflow: hidden;
+  position: relative;
 }
 
-/* cover page uses full-bleed image */
+/* Add paper texture overlay */
+.flipbook .page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(139, 115, 85, 0.02) 2px,
+    rgba(139, 115, 85, 0.02) 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Cover page - Dark overlay for better text contrast */
 .cover-full {
   width: 100%;
   height: 100%;
   position: relative;
 }
+
 .cover-image {
   width: 100%;
   height: 100%;
@@ -29,7 +48,7 @@
   display: block;
 }
 
-/* overlay for cover text */
+/* Premium overlay with gradient */
 .cover-overlay {
   position: absolute;
   inset: 0;
@@ -38,61 +57,161 @@
   align-items: center;
   justify-content: center;
   color: white;
-  background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.15) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.5) 0%,
+    rgba(0, 0, 0, 0.3) 50%,
+    rgba(0, 0, 0, 0.5) 100%
+  );
   text-align: center;
-  padding: 32px;
-}
-.cover-title {
-  font-size: 2.6rem;
-  font-weight: 800;
-  text-shadow: 0 6px 18px rgba(0,0,0,0.6);
-  margin-bottom: 0.5rem;
-}
-.cover-sub {
-  font-size: 1.1rem;
-  opacity: 0.95;
+  padding: 48px;
+  z-index: 2;
 }
 
-/* inner page content */
+.cover-title {
+  font-size: 3.5rem;
+  font-weight: 900;
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.8), 0 8px 24px rgba(0, 0, 0, 0.5);
+  margin-bottom: 1rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.cover-sub {
+  font-size: 1.5rem;
+  font-weight: 500;
+  opacity: 0.95;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  max-width: 400px;
+  line-height: 1.4;
+}
+
+/* Inner page content - Centered both vertically and horizontally */
 .page-inner {
+  min-height: 100%;
   height: 100%;
   width: 100%;
   box-sizing: border-box;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 64px 48px;
+  gap: 24px;
 }
 
-/* story page text style */
-.story-page .page-inner p,
-.story-page .page-inner div {
+/* Story page text style - Premium typography */
+.story-page .page-inner {
   color: #2c2c2c;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  font-size: 18px;
-  line-height: 1.9;
+  font-family: Georgia, "Times New Roman", serif;
 }
 
-/* make sure the turn.js required classes exist */
+.story-page .page-inner .text-lg {
+  font-size: 1.125rem;
+  line-height: 2;
+  color: #1a1a1a;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  max-width: 90%;
+  text-align: center;
+  margin: 0;
+}
+
+/* Page number styling */
+.page-number {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  font-size: 14px;
+  color: rgba(44, 44, 44, 0.4);
+  font-weight: 600;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  z-index: 10;
+}
+
+/* Premium page edges with spine shadow */
+.cover-page {
+  background: linear-gradient(135deg, #2c2c2c 0%, #1a1a1a 100%) !important;
+}
+
+.story-page {
+  background: linear-gradient(135deg, #fffef9 0%, #fff9e8 100%) !important;
+}
+
+/* Turn.js integration */
 .turn-page {
   background: transparent;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.2);
 }
 
-/* page sizes (turn.js will set exact width/height inline) */
+/* Hard shadow edge effect when book is open */
+.flipbook .hard {
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+}
+
+.flipbook .odd {
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.05) 0%, transparent 5%);
+}
+
+.flipbook .even {
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.05) 0%, transparent 5%);
+}
+
+/* Page sizes */
 .flipbook .page,
 .flipbook .page .page-inner {
   width: 100%;
   height: 100%;
 }
 
-/* small screens fallback */
-@media (max-width: 900px) {
-  .cover-title { font-size: 1.8rem; }
-  .cover-sub { font-size: 1rem; }
-  .story-page .page-inner div { font-size: 16px; }
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .cover-title {
+    font-size: 2.5rem;
+  }
+  .cover-sub {
+    font-size: 1.2rem;
+  }
+  .story-page .page-inner .text-lg {
+    font-size: 1rem;
+    line-height: 1.8;
+  }
 }
 
-/* optional: add a subtle page number style (if you want later) */
-.page-number {
-  position: absolute;
-  right: 18px;
-  bottom: 18px;
-  font-size: 12px;
-  color: rgba(0,0,0,0.5);
+@media (max-width: 768px) {
+  .cover-title {
+    font-size: 2rem;
+  }
+  .cover-sub {
+    font-size: 1rem;
+  }
+  .story-page .page-inner .text-lg {
+    font-size: 0.95rem;
+  }
+  .page-number {
+    font-size: 12px;
+  }
+}
+
+/* Hover effect on pages */
+.flipbook .page {
+  transition: transform 0.3s ease;
+}
+
+/* Add subtle animation when XP increases */
+@keyframes xpPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.xp-highlight {
+  animation: xpPulse 0.5s ease-in-out;
 }
