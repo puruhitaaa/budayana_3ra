@@ -144,6 +144,14 @@ export const progressApi = {
    * @returns {Promise<object>}
    */
   getIslandProgress: (islandId) => apiRequest(`/progress/islands/${islandId}`),
+
+  /**
+   * Get cycle count for a specific island
+   * @param {string} islandId
+   * @returns {Promise<object>}
+   */
+  getIslandCycles: (islandId) =>
+    apiRequest(`/progress/islands/${islandId}/cycles`),
 }
 
 /**

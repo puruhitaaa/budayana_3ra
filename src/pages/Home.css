@@ -1073,3 +1073,13 @@
     font-size: 2rem;
   }
 }
+
+.popup-cycle-count {
+  position: absolute;
+  top: 40px;
+  left: 40px;
+  font-family: Fredoka, sans-serif;
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: #000;
+}

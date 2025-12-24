@@ -61,3 +61,18 @@ export function useIslandProgress(islandId) {
     staleTime: 1000 * 60 * 5, // 5 minutes
   })
 }
+
+/**
+ * Hook to get cycle count for a specific island
+ * @param {string} islandId
+ * @returns {object} TanStack Query query object
+ */
+export function useIslandCycles(islandId) {
+  const { data: session } = authClient.useSession()
+
+  return useQuery({
+    queryKey: ["islandCycles", islandId, session?.user?.id],
+    queryFn: () => progressApi.getIslandCycles(islandId),
+    enabled: !!session?.user?.id && !!islandId,
+  })
+}

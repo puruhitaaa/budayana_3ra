@@ -6,7 +6,7 @@ import {
   getStoryUnlockStatus,
   getLatestStoryScore,
 } from "../hooks/useAttempts"
-import { useMyProgress } from "../hooks/useProgress"
+import { useMyProgress, useIslandCycles } from "../hooks/useProgress"
 import { useIsland } from "../hooks/useIslands"
 
 // Helper to see if we need special slug handling
@@ -356,6 +356,9 @@ function IslandPopup({ activeIsland, onClose }) {
   // Fetch attempts for this island
   const { data: attempts } = useAttempts(activeIsland.apiIslandId)
 
+  // Fetch cycle count for this island
+  const { data: cyclesData } = useIslandCycles(activeIsland.apiIslandId)
+
   const handleStageClick = (stage, status) => {
     if (status === "locked") return
     navigate(stage.route)
@@ -444,6 +447,11 @@ function IslandPopup({ activeIsland, onClose }) {
                 alt='close'
               />
             </button>
+
+            {/* Cycle Count */}
+            <div className='popup-cycle-count'>
+              Percobaan : {cyclesData?.cycleCount || 0}
+            </div>
 
             {/* Title */}
             <h2 className='popup-title'>{activeIsland.name}</h2>
