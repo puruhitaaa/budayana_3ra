@@ -204,20 +204,12 @@ export default function Home() {
   //   navigate(stage.route)
   // }
 
-  // Count total completed stories
-  const totalCompletedStories = useMemo(() => {
-    if (progressData && progressData.items) {
-      return progressData.items.filter((p) => p.isCompleted).length
-    }
-    return 0
-  }, [progressData])
-
   return (
     <div className='page'>
       {/* HEADER */}
       <div className='header'>
         <div className='completedStories'>
-          <h1>Cerita Selesai: {totalCompletedStories}</h1>
+          <h1>Cerita Selesai: {progressData?.completedStory}</h1>
         </div>
 
         <div className='gameName'>
