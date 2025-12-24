@@ -209,7 +209,7 @@ export default function Home() {
       {/* HEADER */}
       <div className='header'>
         <div className='completedStories'>
-          <h1>Cerita Selesai: {progressData.completedStory}</h1>
+          <h1>Cerita Selesai: {progressData?.completedStory}</h1>
         </div>
 
         <div className='gameName'>
