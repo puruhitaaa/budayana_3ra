@@ -378,11 +378,13 @@ function IslandPopup({ activeIsland, onClose }) {
       } else if (lowerTitle.includes("post-test")) {
         route = `/islands/${islandSlug}/story/${story.id}/post-test`
       } else {
-        // Assume interactive game or story
-        const hasStoryBook = islandSlug === "jawa" || islandSlug === "papua"
-        route = hasStoryBook
-          ? `/islands/${islandSlug}/story`
-          : `/islands/${islandSlug}/story/${story.id}/game`
+        // Use storyType from API to determine route
+        // STATIC stories use flipbook, INTERACTIVE stories use game page
+        if (story.storyType === "STATIC") {
+          route = `/islands/${islandSlug}/story/${story.id}`
+        } else {
+          route = `/islands/${islandSlug}/story/${story.id}/game`
+        }
       }
 
       return {

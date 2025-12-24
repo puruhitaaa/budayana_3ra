@@ -39,7 +39,9 @@ export default function App() {
 
             {/* Story routes */}
             <Route path='/islands/:islandSlug/story'>
-              <Route index element={<StoryPage />} />
+              {/* Static story with flipbook (requires storyId) */}
+              <Route path=':storyId' element={<StoryPage />} />
+              {/* Pre/Post tests */}
               <Route
                 path=':storyId/pre-test'
                 element={<TestPage testType='pre' />}

@@ -1,8 +1,20 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { useParams, useNavigate } from "react-router-dom"
-import { ArrowLeft, ArrowRight, Clock } from "lucide-react"
-import { getStoryByIsland } from "../../data/stories"
-import { getIslandBySlug } from "../../data/islands"
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useMemo,
+  useCallback,
+} from "react"
+import { useParams, useNavigate, useSearchParams } from "react-router-dom"
+import { ArrowLeft, ArrowRight, Clock, Sparkles } from "lucide-react"
+import { useStory } from "../../hooks/useStories"
+import {
+  useStartAttempt,
+  useAddStage,
+  useUpdateAttempt,
+} from "../../hooks/useAttempts"
+import "./flipbook.css"
 
 const $ = window.$
 
@@ -14,35 +26,143 @@ const formatTime = (seconds) => {
 
 /**
  * Unified Story Page Component (Flipbook)
- * Dynamically loads story data based on island slug from URL
+ * Dynamically loads story data from API based on storyId
  * Uses turn.js for flipbook effect
  */
 export default function StoryPage() {
-  const { islandSlug } = useParams()
+  const { islandSlug, storyId } = useParams()
   const navigate = useNavigate()
 
-  // Get island and story data
-  const island = getIslandBySlug(islandSlug)
-  const story = getStoryByIsland(islandSlug)
-  const totalPages = story?.pages?.length || 0
+  // Use searchParams to track current page (1-indexed in URL)
+  const [searchParams, setSearchParams] = useSearchParams({ page: "1" })
+  const currentPageFromUrl = Math.max(
+    1,
+    parseInt(searchParams.get("page") || "1", 10)
+  )
+
+  // Helper to update page in search params
+  const setCurrentPageUrl = useCallback(
+    (page) => {
+      setSearchParams({ page: String(page) }, { replace: true })
+    },
+    [setSearchParams]
+  )
+
+  // API Hooks
+  const { data: story, isLoading: isStoryLoading } = useStory(storyId)
+  const startAttempt = useStartAttempt()
+  const addStage = useAddStage()
+  const updateAttempt = useUpdateAttempt()
 
   // Component state
   const [timeElapsed, setTimeElapsed] = useState(0)
+  const [timerRunning, setTimerRunning] = useState(true)
   const [xp, setXp] = useState(0)
-  const [currentPage, setCurrentPage] = useState(1)
   const [showExitWarning, setShowExitWarning] = useState(false)
   const [scale, setScale] = useState(1)
+  const [attemptId, setAttemptId] = useState(null)
+  const [attemptStartedAt, setAttemptStartedAt] = useState(null)
+  const [xpHighlight, setXpHighlight] = useState(false)
+  const [pagesReadArray, setPagesReadArray] = useState([1]) // Use array instead of Set for stable dependencies
 
   // book ref and sizing
   const bookRef = useRef(null)
   const containerRef = useRef(null)
   const initRef = useRef(false)
+  const lastPageRef = useRef(1) // Use ref instead of state to avoid dependency issues
 
-  // Timer
+  // Get total pages from staticSlides
+  const totalPages = story?.staticSlides?.length || 0
+  const xpPerPage = totalPages > 0 ? 100 / totalPages : 0
+
+  // Convert array to Set for efficient lookups
+  const pagesRead = useMemo(() => new Set(pagesReadArray), [pagesReadArray])
+
+  // LocalStorage helpers
+  const getStorageKey = (key) => `budayana_story_${storyId}_${key}`
+
+  const saveToStorage = () => {
+    if (!storyId) return
+    try {
+      localStorage.setItem(getStorageKey("xp"), xp.toString())
+      localStorage.setItem(
+        getStorageKey("pagesRead"),
+        JSON.stringify(pagesReadArray)
+      )
+    } catch (e) {
+      console.warn("Failed to save to localStorage:", e)
+    }
+  }
+
+  const loadFromStorage = () => {
+    if (!storyId) return
+    try {
+      const savedXp = localStorage.getItem(getStorageKey("xp"))
+      const savedPages = localStorage.getItem(getStorageKey("pagesRead"))
+
+      if (savedXp) setXp(parseFloat(savedXp))
+      if (savedPages) {
+        const pages = JSON.parse(savedPages)
+        setPagesReadArray(pages)
+      }
+    } catch (e) {
+      console.warn("Failed to load from localStorage:", e)
+    }
+  }
+
+  const clearStorage = () => {
+    if (!storyId) return
+    try {
+      localStorage.removeItem(getStorageKey("xp"))
+      localStorage.removeItem(getStorageKey("pagesRead"))
+    } catch (e) {
+      console.warn("Failed to clear localStorage:", e)
+    }
+  }
+
+  // Load from localStorage on mount
   useEffect(() => {
-    const t = setInterval(() => setTimeElapsed((v) => v + 1), 1000)
+    loadFromStorage()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyId])
+
+  // Save to localStorage whenever XP or pagesRead changes
+  useEffect(() => {
+    saveToStorage()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [xp, pagesReadArray])
+
+  // Start Attempt
+  useEffect(() => {
+    if (storyId && !attemptId && story?.storyType === "STATIC") {
+      startAttempt.mutate(storyId, {
+        onSuccess: (data) => {
+          setAttemptId(data.id)
+          setAttemptStartedAt(data.startedAt)
+        },
+        onError: (err) => console.error("Failed to start attempt", err),
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyId, attemptId, story])
+
+  // Timer Logic
+  useEffect(() => {
+    if (!timerRunning || !attemptStartedAt) return
+
+    const calculateElapsed = () => {
+      const startTime = new Date(attemptStartedAt).getTime()
+      const now = Date.now()
+      const elapsedSeconds = Math.floor(
+        ((max) => (max > 0 ? max : 0))((now - startTime) / 1000)
+      )
+      setTimeElapsed(elapsedSeconds)
+    }
+
+    calculateElapsed()
+    const t = setInterval(calculateElapsed, 1000)
     return () => clearInterval(t)
-  }, [])
+  }, [timerRunning, attemptStartedAt])
 
   // Handle window resize for responsiveness
   useEffect(() => {
@@ -62,12 +182,23 @@ export default function StoryPage() {
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
+  // XP highlight effect timeout
+  useEffect(() => {
+    if (xpHighlight) {
+      const timer = setTimeout(() => setXpHighlight(false), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [xpHighlight])
+
   // Initialize turn.js
   useLayoutEffect(() => {
-    if (!containerRef.current || !story || !$) return
+    if (!containerRef.current || !story || !$ || totalPages === 0) return
 
-    if (bookRef.current && !initRef.current) {
-      const b = $(bookRef.current)
+    // Capture ref value at start of effect for cleanup
+    const currentBook = bookRef.current
+
+    if (currentBook && !initRef.current) {
+      const b = $(currentBook)
       b.turn({
         width: 1100,
         height: 700,
@@ -77,250 +208,273 @@ export default function StoryPage() {
         elevation: 50,
         duration: 600,
         pages: totalPages,
+        display: "single", // Single page mode to prevent skipping
+        page: currentPageFromUrl, // Set initial page from URL
       })
 
-      b.bind("turning", (event, page) => {
-        setCurrentPage(page)
-        if (page >= totalPages - 1) setXp(100)
+      b.bind("turned", (event, page) => {
+        const lastPage = lastPageRef.current
+        const isForward = page > lastPage
+        lastPageRef.current = page
+
+        // Update URL
+        setCurrentPageUrl(page)
+
+        // Only add XP when navigating forward AND haven't read this page yet
+        if (isForward && !pagesRead.has(page)) {
+          setPagesReadArray((prev) => [...prev, page])
+          setXp((prevXp) => Math.min(100, prevXp + xpPerPage))
+          setXpHighlight(true)
+        }
       })
 
       initRef.current = true
     }
 
     return () => {
-      const currentBookRef = bookRef.current
-      if (initRef.current && currentBookRef && $(currentBookRef).turn) {
+      if (initRef.current && currentBook && $(currentBook).turn) {
         try {
-          $(currentBookRef).turn("destroy").remove()
+          $(currentBook).turn("destroy").remove()
         } catch {
           /* ignore */
         }
       }
     }
-  }, [totalPages, story])
+  }, [
+    totalPages,
+    story,
+    currentPageFromUrl,
+    pagesRead,
+    xpPerPage,
+    setCurrentPageUrl,
+  ])
 
   const handleFinish = () => {
-    navigate(`/islands/${islandSlug}/game`)
+    setTimerRunning(false)
+
+    // Ensure XP is exactly 100 for completion
+    const xpGained = 100
+
+    if (attemptId) {
+      // Add Stage
+      addStage.mutate({
+        attemptId,
+        stageData: {
+          stageType: "STORY",
+          timeSpentSeconds: timeElapsed,
+          xpGained: xpGained,
+        },
+      })
+
+      // Update Attempt (Finish)
+      updateAttempt.mutate({
+        attemptId,
+        data: {
+          finishedAt: new Date().toISOString(),
+          totalTimeSeconds: timeElapsed,
+        },
+      })
+    }
+
+    // Clear localStorage when finished
+    clearStorage()
+
+    // Navigate to home with island search param
+    navigate(`/?island=${islandSlug}`)
   }
 
-  // Handle invalid island/story
-  if (!island || !story) {
+  // Handle loading/error states
+  if (isStoryLoading)
     return (
-      <div className='min-h-screen bg-[#fdf4d7] flex items-center justify-center'>
+      <div className='min-h-screen bg-gradient-to-br from-[#fef8e7] to-[#f4e4c1] flex items-center justify-center'>
         <div className='text-center'>
-          <h1 className='text-2xl font-bold text-[#2c2c2c] mb-4'>
-            Story not found for this island
-          </h1>
-          <button
-            onClick={() => navigate("/")}
-            className='bg-[#F7885E] text-white px-6 py-2 rounded-full font-semibold'
-          >
-            Back to Home
-          </button>
+          <div className='animate-spin rounded-full h-16 w-16 border-4 border-[#E4AE28] border-t-transparent mx-auto mb-4'></div>
+          <p className='text-lg font-semibold text-[#2c2c2c]'>
+            Memuat cerita...
+          </p>
         </div>
       </div>
     )
-  }
+
+  if (!story)
+    return (
+      <div className='min-h-screen bg-gradient-to-br from-[#fef8e7] to-[#f4e4c1] flex items-center justify-center'>
+        <div className='text-center p-10'>
+          <p className='text-lg font-semibold text-[#2c2c2c]'>
+            Story not found
+          </p>
+        </div>
+      </div>
+    )
+
+  if (!story.staticSlides || story.staticSlides.length === 0)
+    return (
+      <div className='min-h-screen bg-gradient-to-br from-[#fef8e7] to-[#f4e4c1] flex items-center justify-center'>
+        <div className='text-center p-10'>
+          <p className='text-lg font-semibold text-[#2c2c2c]'>
+            No story slides available
+          </p>
+        </div>
+      </div>
+    )
 
   return (
     <div
       ref={containerRef}
       className='h-screen w-full flex flex-col items-center justify-center overflow-hidden relative'
       style={{
-        backgroundImage: story.backgroundImage
-          ? `url('${story.backgroundImage}')`
-          : undefined,
+        background: story.backgroundImage
+          ? `linear-gradient(rgba(254, 248, 231, 0.85), rgba(244, 228, 193, 0.85)), url('${story.backgroundImage}')`
+          : "linear-gradient(135deg, #fef8e7 0%, #f4e4c1 100%)",
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
     >
       {/* Floating arrows */}
       <div className='absolute inset-0 flex items-center justify-center pointer-events-none z-20'>
-        <div className='w-full max-w-[95%] md:max-w-[92%] lg:max-w-[1400px] flex justify-between px-2'>
+        <div className='w-full max-w-[95%] md:max-w-[92%] lg:max-w-350 flex justify-between px-2'>
           <button
             onClick={() => $(bookRef.current).turn("previous")}
-            className='pointer-events-auto bg-[#E3DBD5] text-black w-12 h-12 rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition'
+            disabled={currentPageFromUrl === 1}
+            className='pointer-events-auto bg-white/90 backdrop-blur-sm text-[#2c2c2c] w-14 h-14 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-all hover:bg-white border-2 border-[#2c2c2c] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100'
           >
-            <ArrowLeft size={26} />
+            <ArrowLeft size={28} strokeWidth={2.5} />
           </button>
-          {currentPage >= totalPages - 1 ? (
+          {currentPageFromUrl >= totalPages ? (
             <button
               onClick={handleFinish}
-              className='pointer-events-auto bg-[#E3DBD5] text-black px-6 py-3 rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition font-bold'
+              className='pointer-events-auto bg-linear-to-r from-[#E4AE28] to-[#F7C951] text-white px-8 py-4 rounded-full flex items-center gap-2 shadow-xl hover:scale-105 transition-all font-bold text-lg border-2 border-[#c79620]'
             >
+              <Sparkles size={20} />
               Selesai
             </button>
           ) : (
             <button
               onClick={() => $(bookRef.current).turn("next")}
-              className='pointer-events-auto bg-[#E3DBD5] text-black w-12 h-12 rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition'
+              className='pointer-events-auto bg-white/90 backdrop-blur-sm text-[#2c2c2c] w-14 h-14 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-all hover:bg-white border-2 border-[#2c2c2c]'
             >
-              <ArrowRight size={26} />
+              <ArrowRight size={28} strokeWidth={2.5} />
             </button>
           )}
         </div>
       </div>
 
-      {/* Flipbook styles */}
-      <style>
-        {`
-#book {
-  width: 1100px !important;
-  height: 700px !important;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  margin: 0 auto;
-}
-.page {
-  width: 550px !important;
-  height: 700px !important;
-  background-color: white;
-  font-size: 18px;
-}
-.cover-full {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  overflow: hidden;
-}
-.cover-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  pointer-events: none;
-}
-.cover-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  padding: 40px;
-  color: white;
-  text-shadow: 0 3px 6px rgba(0,0,0,0.6);
-}
-.cover-page {
-  background: #fffaf3 !important;
-  background-image: url('/assets/paper-texture.png') !important;
-}
-.story-page {
-  background: #fffaf3 !important;
-  background-image: url('/assets/paper-texture.png') !important;
-  background-size: cover !important;
-  background-position: center !important;
-}
-.spine-left-shadow {
-  box-shadow: inset 20px 0 50px -15px rgba(0,0,0,0.15);
-}
-.spine-right-shadow {
-  box-shadow: inset -20px 0 50px -15px rgba(0,0,0,0.15);
-}
-`}
-      </style>
-
       {/* Header */}
-      <div className='w-full max-w-[95%] md:max-w-[92%] lg:max-w-[1400px] grid grid-cols-3 items-center mb-0 relative z-30'>
+      <div className='w-full max-w-[95%] md:max-w-[92%] lg:max-w-350 grid grid-cols-3 items-center mb-4 relative z-30'>
         <div className='flex justify-start'>
           <button
             onClick={() => setShowExitWarning(true)}
-            className='px-4 py-2 md:px-5 md:py-2 bg-white/85 border-2 border-[#2c2c2c] flex items-center gap-2 rounded-full shadow hover:bg-gray-100 transition font-semibold text-sm md:text-base'
+            className='px-5 py-2.5 bg-white/90 backdrop-blur-sm border-2 border-[#2c2c2c] flex items-center gap-2 rounded-full shadow-md hover:bg-white hover:scale-105 transition-all font-semibold text-sm md:text-base'
           >
             <ArrowLeft size={18} /> Kembali
           </button>
         </div>
         <div className='flex justify-center'>
-          <span className='text-white font-bold text-2xl drop-shadow-md'>
-            {currentPage} / {totalPages}
-          </span>
+          <div className='bg-white/90 backdrop-blur-sm px-6 py-2.5 rounded-full border-2 border-[#2c2c2c] shadow-md'>
+            <span className='text-[#2c2c2c] font-bold text-xl'>
+              {currentPageFromUrl} / {totalPages}
+            </span>
+          </div>
         </div>
-        <div className='flex justify-end items-center gap-2 md:gap-3'>
-          <div className='flex items-center gap-2 bg-white/85 px-4 py-2 rounded-full shadow-sm border-2 border-[#2c2c2c]'>
+        <div className='flex justify-end items-center gap-3'>
+          <div className='flex items-center gap-2 bg-white/90 backdrop-blur-sm px-4 py-2.5 rounded-full shadow-md border-2 border-[#2c2c2c]'>
             <Clock size={20} className='text-[#2c2c2c]' />
-            <span className='text-[#2c2c2c] font-semibold tracking-[0.12em]'>
+            <span className='text-[#2c2c2c] font-semibold tracking-wide'>
               {formatTime(timeElapsed)}
             </span>
           </div>
-          <div className='px-3 py-2 md:px-4 md:py-2 bg-white/85 rounded-full flex gap-2 items-center shadow text-sm md:text-base border-2 border-[#2c2c2c]'>
+          <div
+            className={`px-4 py-2.5 bg-white/90 backdrop-blur-sm rounded-full flex gap-2 items-center shadow-md text-base border-2 transition-all duration-300 ${
+              xpHighlight
+                ? "border-green-500 scale-110 bg-green-50"
+                : "border-[#2c2c2c]"
+            }`}
+          >
             <span className='font-bold' style={{ color: "#E4AE28" }}>
               XP
             </span>
-            <span className='font-semibold'>{xp}/100</span>
+            <span
+              className={`font-bold transition-colors duration-300 ${
+                xpHighlight ? "text-green-600" : "text-[#2c2c2c]"
+              }`}
+            >
+              {Math.round(xp)}/100
+            </span>
           </div>
         </div>
       </div>
 
       {/* Flipbook container */}
       <div
-        className='flex items-center justify-center relative transform-gpu transition-transform duration-300 origin-top mt-12'
+        className='flex items-center justify-center relative transform-gpu transition-transform duration-300 origin-top'
         style={{ transform: `scale(${scale})`, width: 1100, height: 700 }}
       >
-        <div id='book' ref={bookRef} className='flipbook'>
-          {story.pages.map((page, idx) => (
-            <div
-              key={idx}
-              className={`page ${
-                page.type === "cover" ? "cover-page" : "story-page"
-              }`}
-            >
-              {page.type === "cover" ? (
-                <div className='cover-full'>
-                  <img
-                    src={story.coverImage}
-                    alt={story.title}
-                    className='cover-image'
-                  />
-                  <div className='cover-overlay'>
-                    <h1 className='cover-title'>{story.title}</h1>
-                    <p className='cover-sub'>{story.subtitle}</p>
+        <div id='book' ref={bookRef} className='flipbook shadow-2xl'>
+          {story.staticSlides.map((slide, idx) => {
+            const isCover = slide.slideType === "COVER"
+
+            return (
+              <div
+                key={slide.id}
+                className={`page ${isCover ? "cover-page" : "story-page"}`}
+              >
+                {isCover ? (
+                  <div className='cover-full'>
+                    <img
+                      src={slide.imageUrl || story.coverImage}
+                      alt={story.title}
+                      className='cover-image'
+                    />
+                    <div className='cover-overlay'>
+                      <h1 className='cover-title'>{story.title}</h1>
+                      <p className='cover-sub'>{story.subtitle}</p>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div
-                  className={`page-inner p-12 flex items-center justify-center h-full w-full ${
-                    idx % 2 === 0 ? "spine-left-shadow" : "spine-right-shadow"
-                  }`}
-                >
-                  <div className='text-[20px] leading-[1.9] whitespace-pre-line text-justify pointer-events-none select-none'>
-                    {page.content}
+                ) : (
+                  <div className='page-inner'>
+                    {slide.imageUrl && (
+                      <div className='mb-6'>
+                        <img
+                          src={slide.imageUrl}
+                          alt='Story'
+                          className='max-h-80 max-w-full object-contain rounded-xl shadow-lg'
+                        />
+                      </div>
+                    )}
+                    <div className='text-lg leading-relaxed text-center text-[#2c2c2c] font-serif px-4'>
+                      {slide.contentText}
+                    </div>
+                    <div className='page-number'>{idx + 1}</div>
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
 
       {/* Exit Warning Popup */}
       {showExitWarning && (
-        <div className='fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4'>
-          <div className='bg-[#fff4d6] w-[90%] max-w-md rounded-3xl border-[3px] border-[#e9c499] shadow-2xl p-6 md:p-8 text-center'>
+        <div className='fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 px-4'>
+          <div className='bg-linear-to-br from-[#fff8e7] to-[#ffe8c1] w-[90%] max-w-md rounded-3xl border-4 border-[#e9c499] shadow-2xl p-8 text-center'>
             <img
               src='/assets/budayana/islands/image 90.png'
               alt='warning'
-              className='w-24 md:w-32 mx-auto mb-3'
+              className='w-32 mx-auto mb-4'
             />
-            <p className='text-lg font-semibold text-[#2f2f2f] leading-relaxed mb-6'>
+            <p className='text-xl font-bold text-[#2c2c2c] leading-relaxed mb-6'>
               Jangan pergi dulu! Progresmu di tahap ini akan hilang kalau kamu
               berhenti sekarang.
             </p>
             <button
               onClick={() => setShowExitWarning(false)}
-              className='w-full bg-[#f88c63] text-white font-bold py-3 rounded-full shadow-md hover:bg-[#e27852] transition mb-2'
+              className='w-full bg-linear-to-r from-[#f88c63] to-[#ff6b45] text-white font-bold py-3.5 rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all mb-3 border-2 border-[#c7623a]'
             >
               Lanjutkan Belajar
             </button>
             <button
-              onClick={() => {
-                setShowExitWarning(false)
-                navigate(-1)
-              }}
-              className='text-[#e64c45] font-bold'
+              onClick={() => navigate(`/?island=${islandSlug}`)}
+              className='text-[#e64c45] font-bold hover:underline'
             >
               Akhiri Sesi
             </button>
