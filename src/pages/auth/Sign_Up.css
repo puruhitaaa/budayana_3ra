@@ -193,25 +193,59 @@ input::placeholder {
   left: 0;
   right: 0;
   display: flex;
+  flex-direction: row;
   justify-content: space-between;
   align-items: flex-end;
   pointer-events: none;
-  /* Let clicks pass through */
+  padding: 0 20px;
+  /* Slight padding from edges */
+}
+
+.animals_group_left,
+.animals_group_right {
+  display: flex;
+  align-items: flex-end;
+  /* Make them cluster together */
 }
 
 .animals img {
-  height: 330px;
-  max-width: 40vw;
-  /* Prevent overlap on medium screens */
+  height: 280px;
+  /* Slightly smaller to fit grouping */
+  width: auto;
+  max-width: 25vw;
   object-fit: contain;
+  transition: all 0.3s ease;
 }
 
+/* Specific Adjustments for Grouping */
+
+/* Left Group: Buaya & Monyet */
 .buaya {
-  margin-bottom: 100px;
+  margin-bottom: 60px;
+  /* Lifted up slightly */
+  margin-right: -20px;
+  /* Overlap with Monyet */
+  z-index: 1;
+}
+
+.monyet {
+  margin-bottom: 20px;
+  /* Sitting lower */
+  z-index: 2;
+}
+
+/* Right Group: Badak & Harimau */
+.badak {
+  margin-bottom: 20px;
+  margin-right: -20px;
+  /* Close to Harimau */
+  z-index: 2;
 }
 
 .harimau {
-  margin-bottom: 80px;
+  margin-bottom: 40px;
+  /* Standing slightly taller/higher */
+  z-index: 1;
 }
 
 .grass {

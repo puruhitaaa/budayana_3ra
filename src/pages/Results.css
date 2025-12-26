@@ -37,21 +37,25 @@
 
 .stat-card.green {
   background-color: #5cdcb3;
+  border: 3px solid #48b894;
   border-bottom: 6px solid #48b894;
 }
 
 .stat-card.purple {
   background-color: #be94e3;
+  border: 3px solid #9e7bc0;
   border-bottom: 6px solid #9e7bc0;
 }
 
 .stat-card.pink {
   background-color: #ff9fbf;
+  border: 3px solid #d986a1;
   border-bottom: 6px solid #d986a1;
 }
 
 .stat-card.orange {
   background-color: #f08c63;
+  border: 3px solid #cc7653;
   border-bottom: 6px solid #cc7653;
 }
 

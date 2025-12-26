@@ -8,6 +8,7 @@ import {
 } from "../hooks/useAttempts"
 import { useMyProgress, useIslandCycles } from "../hooks/useProgress"
 import { useIsland } from "../hooks/useIslands"
+import { islands as staticIslands } from "../data/islands"
 
 // Helper to see if we need special slug handling
 function getIslandSlug(name) {
@@ -53,9 +54,8 @@ function StageCard({ stage, status, index, onClick, attempts }) {
 
   return (
     <div
-      className={`stage-card ${isLocked ? "locked" : ""} ${
-        isCompleted ? "completed" : ""
-      }`}
+      className={`stage-card ${isLocked ? "locked" : ""} ${isCompleted ? "completed" : ""
+        }`}
       onClick={!isLocked ? onClick : undefined}
       style={{ cursor: isLocked ? "not-allowed" : "pointer" }}
     >
@@ -67,11 +67,11 @@ function StageCard({ stage, status, index, onClick, attempts }) {
 
       <div className='stage-content'>
         <p className='stage-title'>{stage.title}</p>
-        <div className='stage-order'>Tahap {stage.order}</div>
+        <div className='stage-order'>Tahap {index + 1}</div>
         {isCompleted && <span className='stage-check'>✓</span>}
       </div>
       {score !== null && (
-        <div className='stage-score-badge'>Latest score: {score}</div>
+        <div className='stage-score-badge'>Nilai Terakhir: {score}</div>
       )}
 
       {isLocked && (
@@ -148,24 +148,33 @@ export default function Home() {
   // Fetch user's progress from API
   const { data: progressData, isLoading: isProgressLoading } = useMyProgress()
 
-  // Use API progress data directly for islands logic
+  // Use API progress data merged with static config
   const allIslands = useMemo(() => {
+    // Create a map of progress items for easier lookup
+    const progressMap = new Map()
     if (progressData && progressData.items) {
-      return progressData.items.map((item) => {
-        const name = item.island?.islandName || "Unknown"
-        const slug = getIslandSlug(name)
-
-        return {
-          id: slug,
-          slug: slug,
-          name: name,
-          isUnlocked: item.isUnlocked,
-          isCompleted: item.isCompleted,
-          apiIslandId: item.islandId,
+      progressData.items.forEach((item) => {
+        if (item.island && item.island.islandName) {
+          const slug = getIslandSlug(item.island.islandName)
+          progressMap.set(slug, item)
         }
       })
     }
-    return []
+
+    // Merge static islands with progress data
+    return staticIslands.map((staticIsland) => {
+      const progressItem = progressMap.get(staticIsland.slug)
+
+      return {
+        ...staticIsland, // includes id, slug, name, etc.
+        // If progress exists, use it. Else use static defaults.
+        isUnlocked: progressItem
+          ? progressItem.isUnlocked
+          : !staticIsland.isLockedDefault,
+        isCompleted: progressItem ? progressItem.isCompleted : false,
+        apiIslandId: progressItem ? progressItem.islandId : null,
+      }
+    })
   }, [progressData])
 
   // Auto-open island popup from URL param (only on initial load)
@@ -346,7 +355,10 @@ function IslandPopup({ activeIsland, onClose }) {
   )
 
   // Fetch attempts for this island
-  const { data: attempts } = useAttempts(activeIsland.apiIslandId)
+  // Use API ID from progress if available, otherwise from island details
+  const { data: attempts } = useAttempts(
+    activeIsland.apiIslandId || islandDetails?.id
+  )
 
   // Fetch cycle count for this island
   const { data: cyclesData } = useIslandCycles(activeIsland.apiIslandId)
@@ -416,9 +428,9 @@ function IslandPopup({ activeIsland, onClose }) {
     return "locked"
   }
 
-  // Count completed stages for progress dots
+  // Count unlocked stages for progress dots (shows how far user has reached)
   const completedCount = useMemo(() => {
-    return Object.values(storyUnlockStatus).filter((s) => s.isFinished).length
+    return Object.values(storyUnlockStatus).filter((s) => s.isUnlocked).length
   }, [storyUnlockStatus])
 
   const isLoading = isIslandLoading
@@ -426,9 +438,8 @@ function IslandPopup({ activeIsland, onClose }) {
   return (
     <div className='popup-overlay' onClick={onClose}>
       <div
-        className={`popup ${
-          activeIsland.isUnlocked ? "popup-unlocked" : "popup-locked"
-        }`}
+        className={`popup ${activeIsland.isUnlocked ? "popup-unlocked" : "popup-locked"
+          }`}
         onClick={(e) => e.stopPropagation()}
       >
         {activeIsland.isUnlocked ? (

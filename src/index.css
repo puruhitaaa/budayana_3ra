@@ -1,0 +1,68 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=ADLaM+Display&family=Fredoka+One&family=Fredoka:wght@300..700&display=swap");
+
+:root {
+    font-family: 'Fredoka', 'Fredoka One', 'ADLaM Display', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+    color: #1f1f1f;
+    background-color: #fdf4d7;
+    /* Restored original background color */
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: #fdf4d7;
+}
+
+
+/* Restored Flip-book animations from src/styles/index.css */
+.book-scene {
+    perspective: 1800px;
+}
+
+.page-wrapper {
+    transform-style: preserve-3d;
+}
+
+.flip-next .left-page {
+    animation: flipNext 0.6s ease forwards;
+}
+
+.flip-prev .right-page {
+    animation: flipPrev 0.6s ease forwards;
+}
+
+@keyframes flipNext {
+    from {
+        transform: rotateY(0deg);
+        z-index: 20;
+    }
+
+    to {
+        transform: rotateY(-180deg);
+        z-index: 1;
+    }
+}
+
+@keyframes flipPrev {
+    from {
+        transform: rotateY(-180deg);
+        z-index: 1;
+    }
+
+    to {
+        transform: rotateY(0deg);
+        z-index: 20;
+    }
+}

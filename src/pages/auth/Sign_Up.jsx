@@ -47,6 +47,9 @@ export default function SignIn() {
             try {
               await initializeProgress.mutateAsync()
 
+              // Force logout so user has to login manually as requested
+              await authClient.signOut()
+
               setPopupType("success")
               setPopupMessage("Pendaftaran berhasil! Silakan masuk ya.")
               setPopupOpen(true)
@@ -203,11 +206,11 @@ export default function SignIn() {
 
       <div className='background'>
         <div className='grass'>
-          <img className='rumput' src='/images/Rumput.png'></img>
+          <img className='rumput' src='/assets/budayana/islands/Rumput.png'></img>
         </div>
 
         <div className='animals'>
-          <div className='animals_right'>
+          <div className='animals_group_left'>
             <img
               className='buaya'
               src='/assets/budayana/islands/Buaya.png'
@@ -218,7 +221,7 @@ export default function SignIn() {
             ></img>
           </div>
 
-          <div className='animals_left'>
+          <div className='animals_group_right'>
             <img
               className='badak'
               src='/assets/budayana/islands/Badak.png'

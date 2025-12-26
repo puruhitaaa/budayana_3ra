@@ -7,6 +7,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute.jsx"
 import GuestRoute from "./components/auth/GuestRoute.jsx"
 
 // Core pages
+import Landing from "./pages/Landing.jsx"
 import Home from "./pages/Home.jsx"
 import Sign_Up from "./pages/auth/Sign_Up.jsx"
 import Log_in from "./pages/auth/Log_in.jsx"
@@ -30,12 +31,17 @@ export default function App() {
         <BackgroundMusic />
 
         <Routes>
+
+          {/* ========================================
+              PUBLIC LANDING PAGE
+              ======================================== */}
+          <Route path='/' element={<Landing />} />
           {/* ========================================
               PROTECTED ROUTES - Requires authentication
               ======================================== */}
           <Route element={<ProtectedRoute />}>
             {/* Home */}
-            <Route index element={<Home />} />
+            <Route path='home' element={<Home />} />
 
             {/* Story routes */}
             <Route path='/islands/:islandSlug/story'>

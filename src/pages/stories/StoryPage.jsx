@@ -64,6 +64,7 @@ export default function StoryPage() {
   const [attemptStartedAt, setAttemptStartedAt] = useState(null)
   const [xpHighlight, setXpHighlight] = useState(false)
   const [pagesReadArray, setPagesReadArray] = useState([1]) // Use array instead of Set for stable dependencies
+  const [showResults, setShowResults] = useState(false)
 
   // book ref and sizing
   const bookRef = useRef(null)
@@ -249,38 +250,102 @@ export default function StoryPage() {
     setCurrentPageUrl,
   ])
 
-  const handleFinish = () => {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleFinish = async () => {
+    setIsSubmitting(true)
     setTimerRunning(false)
 
     // Ensure XP is exactly 100 for completion
     const xpGained = 100
 
     if (attemptId) {
-      // Add Stage
-      addStage.mutate({
-        attemptId,
-        stageData: {
-          stageType: "STORY",
-          timeSpentSeconds: timeElapsed,
-          xpGained: xpGained,
-        },
-      })
+      try {
+        // Add Stage
+        await addStage.mutateAsync({
+          attemptId,
+          stageData: {
+            stageType: "STORY",
+            timeSpentSeconds: timeElapsed,
+            xpGained: xpGained,
+          },
+        })
 
-      // Update Attempt (Finish)
-      updateAttempt.mutate({
-        attemptId,
-        data: {
-          finishedAt: new Date().toISOString(),
-          totalTimeSeconds: timeElapsed,
-        },
-      })
+        // Update Attempt (Finish)
+        await updateAttempt.mutateAsync({
+          attemptId,
+          data: {
+            finishedAt: new Date().toISOString(),
+            totalTimeSeconds: timeElapsed,
+          },
+        })
+      } catch (error) {
+        console.error("Failed to save story finish data", error)
+      }
     }
 
     // Clear localStorage when finished
     clearStorage()
 
-    // Navigate to home with island search param
-    navigate(`/?island=${islandSlug}`)
+    setIsSubmitting(false)
+    // Show results instead of navigating immediately
+    setShowResults(true)
+  }
+
+  // Handle explicit exit (abandon)
+  const [isExitSubmitting, setIsExitSubmitting] = useState(false)
+
+  const handleExit = async () => {
+    setIsExitSubmitting(true)
+    // Clear local storage
+    clearStorage()
+
+    if (attemptId) {
+      try {
+        await updateAttempt.mutateAsync({
+          attemptId,
+          data: {
+            finishedAt: new Date().toISOString(),
+            totalTimeSeconds: timeElapsed,
+          },
+        })
+        // Short delay
+        await new Promise(resolve => setTimeout(resolve, 500))
+      } catch (error) {
+        console.error("Failed to finish attempt on exit:", error)
+      }
+    }
+
+    // Navigate away
+    navigate(`/home?island=${islandSlug}`)
+  }
+
+  const renderResults = () => {
+    return (
+      <div className='w-full max-w-4xl mx-auto px-2 absolute z-50'>
+        <div className='bg-white/95 backdrop-blur-md rounded-[40px] shadow-2xl p-6 md:p-10 border-[3px] border-[#2c2c2c] text-center'>
+          <div className='bg-[#E4AE28] text-white font-extrabold text-3xl px-12 py-3 rounded-full shadow-lg mb-8 inline-block'>
+            Selesai!
+          </div>
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mb-8'>
+            <div className='bg-[#FF9ECF] rounded-3xl p-6 border-[3px] border-[#2c2c2c]'>
+              <span className='font-bold text-xl'>Waktu</span>
+              <div className='text-3xl font-black'>{formatTime(timeElapsed)}</div>
+            </div>
+            <div className='bg-[#BDEBFF] rounded-3xl p-6 border-[3px] border-[#2c2c2c]'>
+              <span className='font-bold text-xl'>Total XP</span>
+              <div className='text-3xl font-black'>+100 XP</div>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate(`/home?island=${islandSlug}`)}
+            className='bg-[#F7885E] text-white font-extrabold text-xl px-12 py-3 rounded-full shadow-lg hover:scale-105 transition border-2 border-[#c7623a]'
+          >
+            Kembali ke Beranda
+          </button>
+        </div>
+      </div>
+    )
   }
 
   // Handle loading/error states
@@ -330,6 +395,12 @@ export default function StoryPage() {
         backgroundPosition: "center",
       }}
     >
+      {showResults && (
+        <div className='absolute inset-0 z-40 bg-black/40 backdrop-blur-sm flex items-center justify-center'>
+          {renderResults()}
+        </div>
+      )}
+
       {/* Floating arrows */}
       <div className='absolute inset-0 flex items-center justify-center pointer-events-none z-20'>
         <div className='w-full max-w-[95%] md:max-w-[92%] lg:max-w-350 flex justify-between px-2'>
@@ -343,10 +414,11 @@ export default function StoryPage() {
           {currentPageFromUrl >= totalPages ? (
             <button
               onClick={handleFinish}
-              className='pointer-events-auto bg-linear-to-r from-[#E4AE28] to-[#F7C951] text-white px-8 py-4 rounded-full flex items-center gap-2 shadow-xl hover:scale-105 transition-all font-bold text-lg border-2 border-[#c79620]'
+              disabled={isSubmitting}
+              className={`pointer-events-auto bg-linear-to-r from-[#E4AE28] to-[#F7C951] text-white px-8 py-4 rounded-full flex items-center gap-2 shadow-xl hover:scale-105 transition-all font-bold text-lg border-2 border-[#c79620] ${isSubmitting ? "opacity-70 cursor-not-allowed" : ""}`}
             >
               <Sparkles size={20} />
-              Selesai
+              {isSubmitting ? "Menyimpan..." : "Selesai"}
             </button>
           ) : (
             <button
@@ -384,19 +456,17 @@ export default function StoryPage() {
             </span>
           </div>
           <div
-            className={`px-4 py-2.5 bg-white/90 backdrop-blur-sm rounded-full flex gap-2 items-center shadow-md text-base border-2 transition-all duration-300 ${
-              xpHighlight
-                ? "border-green-500 scale-110 bg-green-50"
-                : "border-[#2c2c2c]"
-            }`}
+            className={`px-4 py-2.5 bg-white/90 backdrop-blur-sm rounded-full flex gap-2 items-center shadow-md text-base border-2 transition-all duration-300 ${xpHighlight
+              ? "border-green-500 scale-110 bg-green-50"
+              : "border-[#2c2c2c]"
+              }`}
           >
             <span className='font-bold' style={{ color: "#E4AE28" }}>
               XP
             </span>
             <span
-              className={`font-bold transition-colors duration-300 ${
-                xpHighlight ? "text-green-600" : "text-[#2c2c2c]"
-              }`}
+              className={`font-bold transition-colors duration-300 ${xpHighlight ? "text-green-600" : "text-[#2c2c2c]"
+                }`}
             >
               {Math.round(xp)}/100
             </span>
@@ -473,10 +543,11 @@ export default function StoryPage() {
               Lanjutkan Belajar
             </button>
             <button
-              onClick={() => navigate(`/?island=${islandSlug}`)}
-              className='text-[#e64c45] font-bold hover:underline'
+              onClick={handleExit}
+              disabled={isExitSubmitting}
+              className={`font-bold hover:underline ${isExitSubmitting ? "text-gray-400" : "text-[#e64c45]"}`}
             >
-              Akhiri Sesi
+              {isExitSubmitting ? "Mengakhiri..." : "Akhiri Sesi"}
             </button>
           </div>
         </div>

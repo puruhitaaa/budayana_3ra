@@ -33,7 +33,7 @@ export const islands = [
     name: "Sumatra",
     storyTitle: "Malin Kundang",
     unlockOrder: 2,
-    isLockedDefault: true,
+    isLockedDefault: false,
     stages: ["pre-test", "story", "game", "post-test"],
     theme: {
       preTest: {
@@ -56,7 +56,7 @@ export const islands = [
     name: "Jawa",
     storyTitle: "Roro Jonggrang",
     unlockOrder: 3,
-    isLockedDefault: true,
+    isLockedDefault: false,
     stages: ["pre-test", "story", "game", "post-test"],
     theme: {
       preTest: {
@@ -79,7 +79,7 @@ export const islands = [
     name: "Papua",
     storyTitle: "Biwar Penakluk Naga",
     unlockOrder: 4,
-    isLockedDefault: true,
+    isLockedDefault: false,
     stages: ["pre-test", "story", "game", "post-test"],
     theme: {
       preTest: {
@@ -93,6 +93,98 @@ export const islands = [
         cardBorder: "#f0b184",
         accent: "#d87c4a",
         contentBg: "#fff7f2",
+      },
+    },
+  },
+  {
+    id: "kalimantan",
+    slug: "kalimantan",
+    name: "Kalimantan",
+    storyTitle: "Coming Soon",
+    unlockOrder: 5,
+    isLockedDefault: true,
+    stages: ["pre-test", "story", "game", "post-test"],
+    theme: {
+      preTest: {
+        cardBg: "#c6d7d0",
+        cardBorder: "#b1c8c0",
+        accent: "#0e7794",
+        contentBg: "#f2f7ff",
+      },
+      postTest: {
+        cardBg: "#f6c7a6",
+        cardBorder: "#f0b184",
+        accent: "#f19367",
+        contentBg: "#fff9f0",
+      },
+    },
+  },
+  {
+    id: "maluku",
+    slug: "maluku",
+    name: "Maluku",
+    storyTitle: "Coming Soon",
+    unlockOrder: 6,
+    isLockedDefault: true,
+    stages: ["pre-test", "story", "game", "post-test"],
+    theme: {
+      preTest: {
+        cardBg: "#c6d7d0",
+        cardBorder: "#b1c8c0",
+        accent: "#0e7794",
+        contentBg: "#f2f7ff",
+      },
+      postTest: {
+        cardBg: "#f6c7a6",
+        cardBorder: "#f0b184",
+        accent: "#f19367",
+        contentBg: "#fff9f0",
+      },
+    },
+  },
+  {
+    id: "bali",
+    slug: "bali",
+    name: "Bali",
+    storyTitle: "Coming Soon",
+    unlockOrder: 7,
+    isLockedDefault: true,
+    stages: ["pre-test", "story", "game", "post-test"],
+    theme: {
+      preTest: {
+        cardBg: "#c6d7d0",
+        cardBorder: "#b1c8c0",
+        accent: "#0e7794",
+        contentBg: "#f2f7ff",
+      },
+      postTest: {
+        cardBg: "#f6c7a6",
+        cardBorder: "#f0b184",
+        accent: "#f19367",
+        contentBg: "#fff9f0",
+      },
+    },
+  },
+  {
+    id: "nusa",
+    slug: "nusa",
+    name: "Nusa Tenggara",
+    storyTitle: "Coming Soon",
+    unlockOrder: 8,
+    isLockedDefault: true,
+    stages: ["pre-test", "story", "game", "post-test"],
+    theme: {
+      preTest: {
+        cardBg: "#c6d7d0",
+        cardBorder: "#b1c8c0",
+        accent: "#0e7794",
+        contentBg: "#f2f7ff",
+      },
+      postTest: {
+        cardBg: "#f6c7a6",
+        cardBorder: "#f0b184",
+        accent: "#f19367",
+        contentBg: "#fff9f0",
       },
     },
   },

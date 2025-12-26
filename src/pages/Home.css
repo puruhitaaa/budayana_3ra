@@ -43,14 +43,32 @@
   align-items: flex-start;
   position: relative;
   z-index: 5;
+
 }
 
 .header h1 {
   font-family: Fredoka, sans-serif !important;
   font-weight: 600;
-  padding: 10px;
   font-size: 2rem;
   color: #955c2e;
+}
+
+.completedStories {
+  background-color: #FEF6DF;
+  border-radius: 20px;
+  border: 3px solid #955c2e;
+  font-family: Fredoka, sans-serif !important;
+  font-weight: 600;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  padding-left: 30px;
+  padding-right: 30px;
+  font-size: 2rem;
+  color: #955c2e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0px;
 }
 
 .gameName img {
@@ -270,11 +288,13 @@
 }
 
 .dot-active {
-  background-color: #62b42a; /* green */
+  background-color: #62b42a;
+  /* green */
 }
 
 .dot-inactive {
-  background-color: #c4c4c4; /* gray */
+  background-color: #c4c4c4;
+  /* gray */
 }
 
 /* Stage grid – three big cards */
@@ -294,7 +314,8 @@
   overflow: hidden;
   display: flex;
   justify-content: center;
-  transition: transform 0.2s ease, box-shadow 0.2s ease; /* ← di sini */
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  /* ← di sini */
 }
 
 /* UNLOCKED: efek hover */
@@ -307,9 +328,11 @@
 .stage-card.locked {
   filter: brightness(45%);
   cursor: default;
-  transform: none; /* paksa kembali ke posisi normal */
+  transform: none;
+  /* paksa kembali ke posisi normal */
   box-shadow: none;
 }
+
 /* Background image of the card */
 .stage-bg {
   width: 250px;
@@ -382,7 +405,8 @@
 }
 
 .stage-lock-icon {
-  width: 70px; /* adjust until it matches your mockup */
+  width: 70px;
+  /* adjust until it matches your mockup */
   height: auto;
 }
 

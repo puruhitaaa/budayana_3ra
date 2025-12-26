@@ -40,7 +40,7 @@ export default function ProfileLayout() {
         <section className='profile-top'>
           <div className='profile-avatar-circle'>
             <img
-              src={user.image || "/images/Profile.png"}
+              src={user.image || "/assets/budayana/islands/Profile.png"}
               alt='Avatar'
               className='profile-avatar-img'
             />

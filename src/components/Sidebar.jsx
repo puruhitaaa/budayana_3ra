@@ -32,6 +32,10 @@ export default function Sidebar() {
     setIsOpen(!isOpen)
   }
 
+  const goToHome = () => {
+    navigate("/home");
+  };
+
   return (
     <>
       {/* Mobile Toggle Button */}
@@ -46,7 +50,9 @@ export default function Sidebar() {
       />
 
       <aside className={`sidebar ${isOpen ? "open" : ""}`}>
-        <div className='sidebar-logo'>Budayana</div>
+        <div className='sidebar-logo'>
+          <img src="/assets/budayana/islands/Budayana text.png" alt="Budayana" onClick={goToHome} />
+        </div>
 
         <nav className='sidebar-menu'>
           <NavLink

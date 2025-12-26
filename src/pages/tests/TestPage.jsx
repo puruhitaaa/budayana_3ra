@@ -144,7 +144,7 @@ export default function TestPage({ testType = "pre" }) {
 
     const handlePopState = (e) => {
       e.preventDefault()
-      navigate(`/?island=${islandSlug}`, { replace: true })
+      navigate(`/home?island=${islandSlug}`, { replace: true })
     }
 
     // Push a dummy state to detect back button
@@ -216,29 +216,13 @@ export default function TestPage({ testType = "pre" }) {
     setSearchParams({ page: String(pageIndex + 1) }, { replace: true })
   }
 
-  // Helper to log current question answer to API
-  const logCurrentAnswer = () => {
-    const selectedIndex = answers[currentQuestion]
-    if (selectedIndex === undefined || !attemptId) return
 
-    const currentQ = questions[currentQuestion]
-    if (!currentQ) return
-
-    const selectedOptionId = currentQ.optionIds[selectedIndex]
-    if (!selectedOptionId) return
-
-    addQuestionLog.mutate({
-      attemptId,
-      logData: {
-        questionId: currentQ.id,
-        selectedOptionId,
-        attemptCount: 1,
-      },
-    })
-  }
 
   const handleAnswerSelect = (index) =>
     setAnswers({ ...answers, [currentQuestion]: index })
+
+  // State to track correctness of answers
+  const [correctness, setCorrectness] = useState({})
 
   const handleNext = () => {
     // Log the answer before moving to next question
@@ -258,53 +242,93 @@ export default function TestPage({ testType = "pre" }) {
     setCurrentPage(prevPage)
   }
 
-  const handleFinish = async () => {
-    // Log the last question's answer before finishing
-    logCurrentAnswer()
+  // Helper to log current question answer to API and update correctness
+  const logCurrentAnswer = async () => {
+    const selectedIndex = answers[currentQuestion]
+    if (selectedIndex === undefined || !attemptId) return
 
+    const currentQ = questions[currentQuestion]
+    if (!currentQ) return
+
+    const selectedOptionId = currentQ.optionIds[selectedIndex]
+    if (!selectedOptionId) return
+
+    try {
+      const response = await addQuestionLog.mutateAsync({
+        attemptId,
+        logData: {
+          questionId: currentQ.id,
+          selectedOptionId,
+          attemptCount: 1,
+        },
+      })
+
+      // Update correctness state based on API response
+      if (response && typeof response.isCorrect === 'boolean') {
+        setCorrectness(prev => ({
+          ...prev,
+          [currentQuestion]: response.isCorrect
+        }))
+      }
+    } catch (error) {
+      console.error("Failed to log answer:", error)
+    }
+  }
+
+  // Handle Finish
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleFinish = async () => {
+    setIsSubmitting(true)
+    // Log and verify the last question's answer before finishing
+    await logCurrentAnswer()
+
+    // Count correct answers using the verified correctness state
     let correct = 0
-    questions.forEach((q, i) => answers[i] === q.correctAnswer && correct++)
+    questions.forEach((q, i) => {
+      if (correctness[i] === true) {
+        correct++
+      } else if (correctness[i] === undefined) {
+        if (answers[i] === q.correctAnswer && q.correctAnswer !== -1) correct++
+      }
+    })
+
     setCorrectCount(correct)
 
-    // Set initial local score (will be updated with API response)
-    const localScore = (correct / questions.length) * 100
+    // Set initial local score
+    const localScore = Math.round((correct / questions.length) * 100)
     setScore(localScore)
-    setShowResults(true)
 
-    // Update URL to result mode to prevent re-triggering attempt on refresh
+    // Update URL to result mode 
     setSearchParams({ result: "true" }, { replace: true })
 
-    // Save stage completion and mark attempt as finished
     if (attemptId) {
-      // 1. Add stage completion record
-      addStage.mutate(
-        {
+      try {
+        // 1. Add stage completion record
+        await addStage.mutateAsync({
           attemptId,
           stageData: {
-            stageType: stageType, // PRE_TEST or POST_TEST
+            stageType: stageType,
             timeSpentSeconds: timeElapsed,
             xpGained: Math.floor((correct / questions.length) * 50),
           },
-        },
-        {
-          onSuccess: (data) => {
-            // Update score with the percentage from API response (0-100)
-            if (data?.score !== undefined) {
-              setScore(data.score)
-            }
-          },
-        }
-      )
+        })
 
-      // 2. Mark attempt as finished
-      updateAttempt.mutate({
-        attemptId,
-        data: {
-          finishedAt: new Date().toISOString(),
-          totalTimeSeconds: timeElapsed,
-        },
-      })
+        // 2. Mark attempt as finished
+        await updateAttempt.mutateAsync({
+          attemptId,
+          data: {
+            finishedAt: new Date().toISOString(),
+            totalTimeSeconds: timeElapsed,
+          },
+        })
+      } catch (error) {
+        console.error("Failed to save finish data:", error)
+      }
     }
+
+    setIsSubmitting(false)
+    setShowResults(true)
   }
 
   const handleBackToHome = () => {
@@ -312,8 +336,29 @@ export default function TestPage({ testType = "pre" }) {
     // if (nextStage) {
     //   navigate(`/islands/${islandSlug}/${nextStage}`)
     // } else {
-    navigate(`/?island=${islandSlug}`)
+    navigate(`/home?island=${islandSlug}`)
     // }
+  }
+
+  const handleConfirmExit = async () => {
+    setIsSubmitting(true)
+    if (attemptId) {
+      try {
+        await logCurrentAnswer() // Ensure last answer is logged/cleared
+        await updateAttempt.mutateAsync({
+          attemptId,
+          data: {
+            finishedAt: new Date().toISOString(),
+            totalTimeSeconds: timeElapsed,
+          },
+        })
+        // Short delay to ensure backend consistency
+        await new Promise(resolve => setTimeout(resolve, 500))
+      } catch (error) {
+        console.error("Failed to finish attempt on exit:", error)
+      }
+    }
+    navigate(`/home?island=${islandSlug}`)
   }
 
   // Handle invalid island
@@ -325,7 +370,7 @@ export default function TestPage({ testType = "pre" }) {
             Island not found
           </h1>
           <button
-            onClick={() => navigate(`/?island=${islandSlug}`)}
+            onClick={() => navigate(`/home?island=${islandSlug}`)}
             className='bg-[#F7885E] text-white px-6 py-2 rounded-full font-semibold'
           >
             Back to Home
@@ -361,7 +406,7 @@ export default function TestPage({ testType = "pre" }) {
             {questionsError.message || "Terjadi kesalahan. Silakan coba lagi."}
           </p>
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/home")}
             className='bg-[#F7885E] text-white px-6 py-2 rounded-full font-semibold'
           >
             Back to Home
@@ -383,7 +428,7 @@ export default function TestPage({ testType = "pre" }) {
             Belum ada pertanyaan untuk test ini.
           </p>
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/home")}
             className='bg-[#F7885E] text-white px-6 py-2 rounded-full font-semibold'
           >
             Back to Home
@@ -423,7 +468,7 @@ export default function TestPage({ testType = "pre" }) {
                   Nilai
                 </span>
                 <span className='text-[#2c2c2c] font-black text-3xl md:text-4xl'>
-                  {Math.round(score)}%
+                  {Math.round(score)}
                 </span>
               </div>
             </div>
@@ -525,11 +570,10 @@ export default function TestPage({ testType = "pre" }) {
             <button
               onClick={handlePrevQuestion}
               disabled={currentQuestion === 0}
-              className={`flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold shadow-md transition ${
-                currentQuestion === 0
-                  ? "bg-[#f2c3c3] cursor-not-allowed"
-                  : "bg-[#e76964] hover:bg-[#d95e59]"
-              }`}
+              className={`flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold shadow-md transition ${currentQuestion === 0
+                ? "bg-[#f2c3c3] cursor-not-allowed"
+                : "bg-[#e76964] hover:bg-[#d95e59]"
+                }`}
             >
               <ArrowLeft size={20} />
               Sebelumnya
@@ -542,25 +586,23 @@ export default function TestPage({ testType = "pre" }) {
             {isLastQuestion ? (
               <button
                 onClick={handleFinish}
-                disabled={answers[currentQuestion] === undefined}
-                className={`flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold shadow-md transition ${
-                  answers[currentQuestion] === undefined
-                    ? "bg-gray-300 cursor-not-allowed opacity-50"
-                    : "bg-[#19758E] hover:bg-[#17748D]"
-                }`}
+                disabled={answers[currentQuestion] === undefined || isSubmitting}
+                className={`flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold shadow-md transition ${answers[currentQuestion] === undefined || isSubmitting
+                  ? "bg-gray-300 cursor-not-allowed opacity-50"
+                  : "bg-[#19758E] hover:bg-[#17748D]"
+                  }`}
               >
-                Selesai
-                <ArrowRight size={20} />
+                {isSubmitting ? "Menyimpan..." : "Selesai"}
+                {!isSubmitting && <ArrowRight size={20} />}
               </button>
             ) : (
               <button
                 onClick={handleNext}
                 disabled={answers[currentQuestion] === undefined}
-                className={`flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold shadow-md transition ${
-                  answers[currentQuestion] === undefined
-                    ? "bg-gray-300 cursor-not-allowed opacity-50"
-                    : "bg-[#19758E] hover:bg-[#17748D]"
-                }`}
+                className={`flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold shadow-md transition ${answers[currentQuestion] === undefined
+                  ? "bg-gray-300 cursor-not-allowed opacity-50"
+                  : "bg-[#19758E] hover:bg-[#17748D]"
+                  }`}
               >
                 Berikutnya
                 <ArrowRight size={20} />
@@ -593,10 +635,11 @@ export default function TestPage({ testType = "pre" }) {
             </button>
 
             <button
-              onClick={() => navigate("/")}
-              className='text-[#e64c45] font-bold'
+              onClick={handleConfirmExit}
+              disabled={isSubmitting}
+              className={`font-bold ${isSubmitting ? "text-gray-400" : "text-[#e64c45]"}`}
             >
-              Akhiri Sesi
+              {isSubmitting ? "Mengakhiri..." : "Akhiri Sesi"}
             </button>
           </div>
         </div>

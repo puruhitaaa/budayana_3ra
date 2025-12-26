@@ -174,22 +174,31 @@ export function getLatestAttempt(attempts) {
 export function getLatestStoryScore(attempts, storyId) {
   if (!attempts?.length || !storyId) return null
 
+  // Filter for finished attempts of this story
   const storyAttempts = attempts.filter(
     (a) => a.storyId === storyId && a.finishedAt !== null
   )
 
   if (storyAttempts.length === 0) return null
 
-  // Get latest by finishedAt
-  const latest = storyAttempts.sort(
+  // Sort by finishedAt descending (newest first)
+  const sorted = storyAttempts.sort(
     (a, b) => new Date(b.finishedAt) - new Date(a.finishedAt)
-  )[0]
+  )
 
-  // Return the most relevant score
-  if (latest.postTestScore !== null) return Math.round(latest.postTestScore)
-  if (latest.preTestScore !== null) return Math.round(latest.preTestScore)
-  if (latest.totalXpGained > 0) return latest.totalXpGained
-  if (latest.correctInteractiveCnt !== null) return latest.correctInteractiveCnt
+  // Find the first attempt that has a valid score/value
+  for (const attempt of sorted) {
+    if (attempt.postTestScore !== null) return Math.round(attempt.postTestScore)
+    if (attempt.preTestScore !== null) return Math.round(attempt.preTestScore)
+    // For stories/games, we check XP or correct count. 
+    // However, an abandoned game might have 0 XP but we only want to show if it's "valid" 
+    // The user says "history nilai terakhir hilang", implying they want the last "real" score.
+    // If I got 100 XP, then abandoned (0 XP), I want to see 100.
+    // So we skip if totalXpGained is 0 AND correctInteractiveCnt is null?
+    // Let's assume a valid score is > 0 OR explicitly has pre/post score.
+    if (attempt.totalXpGained > 0) return attempt.totalXpGained
+    // if (attempt.correctInteractiveCnt !== null) return attempt.correctInteractiveCnt
+  }
 
   return null
 }
