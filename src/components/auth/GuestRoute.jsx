@@ -21,7 +21,7 @@ export default function GuestRoute() {
 
   // Redirect authenticated users to their intended destination or home
   if (session?.user) {
-    const from = location.state?.from?.pathname || "/"
+    const from = location.state?.from?.pathname || "/home"
     return <Navigate to={from} replace />
   }
 

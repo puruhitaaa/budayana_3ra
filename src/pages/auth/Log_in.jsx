@@ -42,7 +42,7 @@ export default function Login() {
       // }
 
       alert("Login successful!")
-      navigate("/")
+      navigate("/home")
     },
     onError: (error) => {
       console.error(error)

@@ -59,17 +59,22 @@ export default function GamePage() {
   const [dragDropOrder, setDragDropOrder] = useState({})
 
   // Helper to map API slideType to internal type
-  const getSlideType = (slideType) => {
-    switch (slideType) {
+  const getInternalType = (slide) => {
+    // If it has question data, treat as question regardless of type string
+    if (slide.question || slide.slideType === "GAME" || slide.slideType === "ESSAY") {
+      return "question"
+    }
+
+    switch (slide.slideType) {
       case "IMAGE":
       case "COVER":
         return "image"
-      case "GAME":
-        return "question"
       case "ENDING":
         return "ending"
       default:
-        return "image" // Default fallback
+        // Fallback: if it's in interactiveSlides, it's likely a question or image
+        // We'll treat as image if no question data
+        return "image"
     }
   }
 
@@ -85,15 +90,19 @@ export default function GamePage() {
     const interactiveSlides =
       story.interactiveSlides?.map((s) => ({
         ...s,
-        type: getSlideType(s.slideType),
+        type: getInternalType(s),
         sortOrder: s.slideNumber,
       })) || []
 
     // Combine and sort by slideNumber
-    return [...staticSlides, ...interactiveSlides].sort(
+    const combined = [...staticSlides, ...interactiveSlides].sort(
       (a, b) => a.sortOrder - b.sortOrder
     )
-  }, [story])
+
+
+
+    return combined
+  }, [story, islandSlug])
 
   // Current Page Data
   const currentPageData = pages[currentPageIndex]
@@ -257,7 +266,20 @@ export default function GamePage() {
   }, [dragDropOrder, attemptId])
 
   // Navigation
+  const [isNavigating, setIsNavigating] = useState(false)
+
   const goNext = () => {
+    // Check if current question has pending answer validation
+    if (isQuestion) {
+      const currentQ = currentPageData.question
+      const currentAns = answers[currentQ.id]
+
+      // If we have an answer but it's pending, don't proceed yet
+      if (currentAns && currentAns.pending) {
+        return
+      }
+    }
+
     if (isLastPage) {
       handleFinish()
     } else {
@@ -332,7 +354,10 @@ export default function GamePage() {
   }
 
   // Finish Logic
-  const handleFinish = () => {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleFinish = async () => {
+    setIsSubmitting(true)
     setTimerRunning(false)
     setFinalTime(timeElapsed)
 
@@ -342,33 +367,66 @@ export default function GamePage() {
       (a) => a.isCorrect
     ).length
     const score = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0
-    const xpGained = Math.floor(score) // Simplified XP logic
+    const xpGained = Math.floor(score)
 
     if (attemptId) {
-      // Add Stage
-      addStage.mutate({
-        attemptId,
-        stageData: {
-          stageType: "STORY", // or 'GAME' based on mapping
-          timeSpentSeconds: timeElapsed,
-          xpGained: xpGained,
-        },
-      })
+      try {
+        // Add Stage
+        await addStage.mutateAsync({
+          attemptId,
+          stageData: {
+            stageType: "STORY",
+            timeSpentSeconds: timeElapsed,
+            xpGained: xpGained,
+          },
+        })
 
-      // Update Attempt (Finish)
-      updateAttempt.mutate({
-        attemptId,
-        data: {
-          finishedAt: new Date().toISOString(),
-          totalTimeSeconds: timeElapsed,
-        },
-      })
+        // Update Attempt (Finish)
+        await updateAttempt.mutateAsync({
+          attemptId,
+          data: {
+            finishedAt: new Date().toISOString(),
+            totalTimeSeconds: timeElapsed,
+          },
+        })
+      } catch (error) {
+        console.error("Failed to save game finish data:", error)
+      }
     }
 
     // Clear drag-drop localStorage since game is finished
     clearDragDropStorage()
 
+    setIsSubmitting(false)
     setCurrentPage(pages.length) // Go to results
+  }
+
+  // Handle explicit exit (abandon)
+  const [isExitSubmitting, setIsExitSubmitting] = useState(false)
+
+  const handleExit = async () => {
+    setIsExitSubmitting(true)
+    // Clear drag-drop storage
+    clearDragDropStorage()
+
+    if (attemptId) {
+      try {
+        await updateAttempt.mutateAsync({
+          attemptId,
+          data: {
+            finishedAt: new Date().toISOString(),
+            totalTimeSeconds: timeElapsed,
+          },
+        })
+        // Short delay
+        await new Promise(resolve => setTimeout(resolve, 500))
+      } catch (error) {
+        console.error("Failed to finish attempt on exit:", error)
+      }
+    }
+
+    // Navigate away
+    navigate(`/home?island=${islandSlug}`)
   }
 
   // Render Loading
@@ -597,17 +655,17 @@ export default function GamePage() {
                 backgroundColor: isLocked
                   ? "#9ED772"
                   : isPending
-                  ? "#FFD700"
-                  : "#4fb986",
+                    ? "#FFD700"
+                    : "#4fb986",
               }}
             >
               {isLocked
                 ? "Jawaban Benar ✓"
                 : isPending
-                ? "Memeriksa..."
-                : isIncorrect
-                ? "Periksa Lagi"
-                : "Periksa Jawaban"}
+                  ? "Memeriksa..."
+                  : isIncorrect
+                    ? "Periksa Lagi"
+                    : "Periksa Jawaban"}
             </button>
           </div>
 
@@ -641,11 +699,10 @@ export default function GamePage() {
                     key={index}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, index)}
-                    className={`relative min-h-[100px] md:min-h-[120px] rounded-xl border-2 flex flex-col items-center justify-center p-3 transition ${
-                      item
-                        ? "border-solid border-[#2c2c2c]"
-                        : "border-dashed border-gray-300"
-                    } ${ringClass}`}
+                    className={`relative min-h-[100px] md:min-h-[120px] rounded-xl border-2 flex flex-col items-center justify-center p-3 transition ${item
+                      ? "border-solid border-[#2c2c2c]"
+                      : "border-dashed border-gray-300"
+                      } ${ringClass}`}
                     style={bgStyle}
                   >
                     <div className='text-xs font-bold text-gray-500 mb-2'>
@@ -716,6 +773,56 @@ export default function GamePage() {
     )
   }
 
+  // Render Essay Question
+  const renderEssay = (question) => {
+    const current = answers[question.id]
+    const textValue = current?.textValue || ""
+
+    const handleTextChange = (e) => {
+      const val = e.target.value
+      setAnswers((prev) => ({
+        ...prev,
+        [question.id]: {
+          textValue: val,
+          isCorrect: val.trim().length > 0, // Mark as "correct" if not empty
+          choiceIndex: -1, // No choice index for essay
+          pending: false,
+        },
+      }))
+    }
+
+    const handleEssayBlur = () => {
+      if (textValue.trim().length > 0 && attemptId) {
+        addQuestionLog.mutate({
+          attemptId,
+          logData: {
+            questionId: question.id,
+            userAnswerText: textValue,
+            attemptCount: 1,
+            selectedOptionId: null, // No option ID for essay
+          },
+        })
+      }
+    }
+
+    return (
+      <div className='flex flex-col gap-4'>
+        <textarea
+          className='w-full h-40 p-4 border-2 border-[#2c2c2c] rounded-2xl text-lg resize-none focus:outline-none focus:ring-4 focus:ring-[#BDEBFF]'
+          placeholder='Tulis jawabanmu di sini...'
+          value={textValue}
+          onChange={handleTextChange}
+          onBlur={handleEssayBlur}
+        ></textarea>
+        {textValue.trim().length > 0 && (
+          <div className='text-[#4fb986] font-semibold flex items-center gap-2'>
+            <span>✓</span> Jawaban tersimpan
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // Renders a question slide
   const renderQuestionPage = (pageData) => {
     const question = pageData.question
@@ -728,6 +835,9 @@ export default function GamePage() {
     switch (questionType) {
       case "DRAG_DROP":
         questionRenderer = renderDragDrop(question)
+        break
+      case "ESSAY":
+        questionRenderer = renderEssay(question)
         break
       case "TRUE_FALSE":
       case "MCQ":
@@ -780,13 +890,13 @@ export default function GamePage() {
               <span className='font-bold text-xl'>Waktu</span>
               <div className='text-3xl font-black'>{formatTime(finalTime)}</div>
             </div>
-            <div className='bg-[#5ADCB6] rounded-3xl p-6 border-[3px] border-[#2c2c2c]'>
-              <span className='font-bold text-xl'>Nilai</span>
-              <div className='text-3xl font-black'>{score}%</div>
+            <div className='bg-[#BDEBFF] rounded-3xl p-6 border-[3px] border-[#2c2c2c]'>
+              <span className='font-bold text-xl'>Total XP</span>
+              <div className='text-3xl font-black'>+{score} XP</div>
             </div>
           </div>
           <button
-            onClick={() => navigate(`/?island=${islandSlug}`)}
+            onClick={() => navigate(`/home?island=${islandSlug}`)}
             className='bg-[#F7885E] text-white font-extrabold text-xl px-12 py-3 rounded-full shadow-lg hover:bg-[#e4764c] transition'
           >
             Kembali ke Beranda
@@ -797,20 +907,40 @@ export default function GamePage() {
   }
 
   // Header
-  const renderHeader = () => (
-    <div className='w-full max-w-5xl mx-auto px-2 mb-6 flex justify-between items-center'>
-      <button
-        onClick={() => setShowExitWarning(true)}
-        className='px-4 py-2 bg-white/80 border-2 border-[#2c2c2c] rounded-full flex gap-2 items-center font-semibold hover:bg-gray-100'
-      >
-        <ArrowLeft size={18} /> Keluar
-      </button>
-      <div className='flex gap-2 bg-white/70 px-4 py-2 rounded-full border-2 border-[#2c2c2c] shadow-sm'>
-        <Clock size={20} />
-        <span className='font-semibold'>{formatTime(timeElapsed)}</span>
+  const renderHeader = () => {
+    // Calculate current XP (0-100)
+    const totalQuestions = pages.filter((p) => p.type === "question").length
+    const correctCount = Object.values(answers).filter(
+      (a) => a.isCorrect
+    ).length
+    const currentXP =
+      totalQuestions > 0
+        ? Math.round((correctCount / totalQuestions) * 100)
+        : 0
+
+    return (
+      <div className='w-full max-w-5xl mx-auto px-2 mb-6 flex justify-between items-center'>
+        <button
+          onClick={() => setShowExitWarning(true)}
+          className='px-4 py-2 bg-white/80 border-2 border-[#2c2c2c] rounded-full flex gap-2 items-center font-semibold hover:bg-gray-100'
+        >
+          <ArrowLeft size={18} /> Keluar
+        </button>
+        <div className='flex gap-2'>
+          <div className='flex gap-2 bg-white/70 px-4 py-2 rounded-full border-2 border-[#2c2c2c] shadow-sm'>
+            <span className='font-bold text-[#E4AE28]'>XP</span>
+            <span className='font-semibold'>
+              {currentXP}/{totalQuestions > 0 ? "100" : "0"}
+            </span>
+          </div>
+          <div className='flex gap-2 bg-white/70 px-4 py-2 rounded-full border-2 border-[#2c2c2c] shadow-sm'>
+            <Clock size={20} />
+            <span className='font-semibold'>{formatTime(timeElapsed)}</span>
+          </div>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   // Incorrect Popup
   const renderIncorrectPopup = () => {
@@ -848,7 +978,7 @@ export default function GamePage() {
             Lanjutkan Main
           </button>
           <button
-            onClick={() => navigate(`/?island=${islandSlug}`)}
+            onClick={handleExit}
             className='text-[#e64c45] font-bold'
           >
             Keluar
@@ -866,14 +996,14 @@ export default function GamePage() {
         {isResultsPage
           ? renderResults()
           : isStory
-          ? renderStoryPage(currentPageData)
-          : isImage
-          ? renderImagePage(currentPageData)
-          : isQuestion
-          ? renderQuestionPage(currentPageData)
-          : isEnding
-          ? renderEndingPage()
-          : null}
+            ? renderStoryPage(currentPageData)
+            : isImage
+              ? renderImagePage(currentPageData)
+              : isQuestion
+                ? renderQuestionPage(currentPageData)
+                : isEnding
+                  ? renderEndingPage()
+                  : null}
       </div>
 
       {!isResultsPage && (
@@ -887,9 +1017,21 @@ export default function GamePage() {
           </button>
           <button
             onClick={goNext}
-            className='flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold transition bg-[#4fb986]'
+            disabled={(isQuestion && answers[currentPageData?.question?.id]?.isCorrect !== true) || isSubmitting}
+            className={`flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold transition ${(isQuestion && answers[currentPageData?.question?.id]?.isCorrect !== true) || isSubmitting
+              ? "bg-gray-400 cursor-not-allowed opacity-70"
+              : "bg-[#4fb986]"
+              }`}
           >
-            {isLastPage ? "Selesai" : "Berikutnya"} <ArrowRight size={20} />
+            {isQuestion && answers[currentPageData?.question?.id]?.pending ? (
+              "Memproses..."
+            ) : isSubmitting ? (
+              "Menyimpan..."
+            ) : (
+              <>
+                {isLastPage ? "Selesai" : "Berikutnya"} <ArrowRight size={20} />
+              </>
+            )}
           </button>
         </div>
       )}

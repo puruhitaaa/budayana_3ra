@@ -5,7 +5,7 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
-  : "/api"
+  : "https://budayana-dusky.vercel.app/api"
 
 /**
  * Make an API request with auth headers
