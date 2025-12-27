@@ -155,17 +155,21 @@ export default function Results() {
           </div>
           <div className='stat-card pink'>
             <div className='stat-value'>
-              {stats?.averagePreTestScore !== undefined
-                ? Math.round(stats.averagePreTestScore)
-                : "0"}
+              <p>
+                {stats?.averagePreTestScore !== undefined
+                  ? Math.round(stats.averagePreTestScore)
+                  : "0"}%
+              </p>
             </div>
             <div className='stat-label'>Rata-rata Pre Test</div>
           </div>
           <div className='stat-card orange'>
             <div className='stat-value'>
-              {stats?.averagePostTestScore !== undefined
-                ? Math.round(stats.averagePostTestScore)
-                : "0"}
+              <p>
+                {stats?.averagePostTestScore !== undefined
+                  ? Math.round(stats.averagePostTestScore)
+                  : "0"}%
+              </p>
             </div>
             <div className='stat-label'>Rata-rata Post Test</div>
           </div>
@@ -231,9 +235,17 @@ export default function Results() {
                   displayXp = attempt.stages.reduce((sum, s) => sum + (s.xpGained || 0), 0)
                 }
 
+                // If XP is still 0, default to 100 only for STATIC stories (or untyped stories that aren't tests)
+                // Games (INTERACTIVE) should show 0 if score is 0
+                const isStaticStory = attempt.story?.storyType === "STATIC" || (!attempt.story?.storyType && !isTest)
 
-                if (displayXp === 0 && !isTest) {
+                if (displayXp === 0 && isStaticStory) {
                   displayXp = 100;
+                }
+
+                // Per user request, Tests (Pre/Post) should NOT award XP.
+                if (isTest) {
+                  displayXp = 0;
                 }
 
                 // Calculate duration
@@ -252,12 +264,12 @@ export default function Results() {
                     <div>{displayTitle}</div>
                     <div>
                       {isTest && attempt.preTestScore !== null
-                        ? attempt.preTestScore
+                        ? Math.round(attempt.preTestScore)
                         : "-"}
                     </div>
                     <div>
                       {isTest && attempt.postTestScore !== null
-                        ? attempt.postTestScore
+                        ? Math.round(attempt.postTestScore)
                         : "-"}
                     </div>
                     <div>{displayXp}</div>

@@ -105,6 +105,11 @@ form {
 }
 
 label {
+  background-color: #FEF6DF;
+  border-radius: 10px;
+  padding: 2px;
+  padding-left: 10px;
+  width: 25%;
   font-family: Fredoka, sans-serif;
   color: #955C2E;
   font-weight: 650;

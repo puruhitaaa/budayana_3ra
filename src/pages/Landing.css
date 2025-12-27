@@ -25,29 +25,42 @@ body {
     justify-content: space-between;
     align-items: center;
     background-color: #FEF6DF;
-    z-index: 5;
-    border-bottom: 3px solid #955C2E;
-
+    z-index: 100;
+    padding: 18px 30px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    /* Subtle shadow for depth */
 }
 
-.header img {
-    width: 15%;
-    align-items: center;
-    margin: 20px 20px;
+.header_landing img {
+    height: 50px;
+    /* Reduced from 60px */
+    width: auto;
+    object-fit: contain;
+    cursor: pointer;
+    padding: 10px 20px;
 }
 
 .header_opt {
     display: flex;
     gap: 40px;
-    margin-right: 30px;
-    color: #955C2E;
-    font-weight: 600;
-    font-size: 1.6rem;
     align-items: center;
+    color: #955C2E;
+    font-weight: 700;
+    font-size: 1.2rem;
+    /* Adjusted for better proportion */
+    font-family: 'Fredoka', sans-serif;
+}
+
+.header_opt p {
+    margin: 0;
+    /* Remove default margins */
+    transition: color 0.3s ease;
 }
 
 .header_opt p:hover {
-    text-decoration: underline;
+    color: #7a4b26;
+    text-decoration: none;
+    /* Modern look usually avoids underline unless link */
     cursor: pointer;
 }
 
@@ -55,17 +68,25 @@ body {
     background-color: #955C2E;
     color: #ffffff;
     border: none;
-    padding: 10px 30px;
+    padding: 12px 32px;
     border-radius: 50px;
     cursor: pointer;
     font-family: 'Fredoka', sans-serif;
     font-weight: 600;
-    font-size: 1.6rem;
-    height: 40%;
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+    margin-bottom: auto;
+    box-shadow: 0 4px 6px rgba(149, 92, 46, 0.2);
+}
+
+.btn_login:hover {
+    background-color: #7a4b26;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(149, 92, 46, 0.3);
 }
 
 .landing_child {
-    margin-top: 3%;
+    margin-top: 8%;
 }
 
 .prambanan img {
@@ -74,6 +95,8 @@ body {
     height: auto;
     left: -15%;
     z-index: -3;
+    top: 4%;
+    /* Moved upper as requested */
 }
 
 .bg_green {
@@ -92,7 +115,7 @@ body {
     display: flex;
     justify-content: space-around;
     align-items: center;
-    gap: 50px;
+    
 }
 
 .hero_img {
@@ -101,9 +124,9 @@ body {
 }
 
 .hero_img img {
-    width: 85%;
+    width: 95%;
     height: auto;
-    padding-left: 70px;
+    padding-left: 90px;
     padding-right: 20px;
 }
 
@@ -116,30 +139,51 @@ body {
     margin-right: 10%;
 }
 
-.hero_text h1 {
-    font-family: 'Fredoka', sans-serif;
-    font-weight: 600;
-    width: 100%;
-    color: #967C66;
-    margin-top: 15px;
-    margin-bottom: 20px;
+.hero_text img {
+    width: 400px;
+    /* Increased size */
+    max-width: 1000px;
+    height: auto;
+    margin-bottom: 10px;
+    /* Reduced from 60px to bring text closer */
 }
 
-
+.hero_text h1 {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    /* Bold */
+    width: 100%;
+    color: #955C2E;
+    /* Equal to login button color */
+    margin-top: 5px;
+    /* Close to image */
+    margin-bottom: 30px;
+    /* Space before button */
+    line-height: 1.2;
+    font-size: 1.5rem;
+}
 
 .about_us {
-    top: 120%;
-    margin: 50px;
+    top: 150%;
+    /* Moved down */
+    margin: 50px auto;
+    /* Centered container */
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
+    /* Centered content */
+    gap: 80px;
+    /* Gap between text and image */
     align-items: center;
-    padding-top: 100px;
+    padding-top: 190px;
+    /* More spacing */
+    max-width: 1200px;
 }
 
 .about_us h1 {
     font-family: 'Fredoka', sans-serif;
     font-weight: 600;
-    width: 50%;
+    width: 80%;
+    /* Full width in container */
     font-size: 4rem;
     color: #ffffff;
     margin-top: 15px;
@@ -150,15 +194,19 @@ body {
     font-family: 'ADLaM Display', sans-serif;
     color: #ffffff;
     font-weight: 100;
-    width: 60%;
+    width: 100%;
     margin-top: 15px;
     margin-bottom: 30px;
     font-size: 1.5rem;
+    /* Increased font size */
+    line-height: 1.6;
 }
 
 .about_us img {
-    width: 40%;
-    margin-right: 100px;
+    width: 45%;
+    /* Increased width */
+    margin-right: 0;
+    /* Removed margin since we use gap */
 }
 
 

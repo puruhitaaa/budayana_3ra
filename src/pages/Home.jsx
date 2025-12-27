@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import "./Home.css"
+import { Check } from 'lucide-react'
 import {
   useAttempts,
   getStoryUnlockStatus,
@@ -19,13 +20,13 @@ function getIslandSlug(name) {
 
 // ISLAND DISPLAY DATA (positions on map)
 const islandPositions = {
-  sumatra: { left: "12%", top: "25%" },
-  kalimantan: { left: "31%", top: "28%" },
+  sumatra: { left: "5%", top: "25%" },
+  kalimantan: { left: "28%", top: "28%" },
   sulawesi: { left: "49%", top: "40%" },
-  maluku: { left: "62%", top: "42%" },
-  papua: { left: "71%", top: "45%" },
-  jawa: { left: "30%", top: "70%" },
-  bali: { left: "53%", top: "75%" },
+  maluku: { left: "63%", top: "40%" },
+  papua: { left: "75%", top: "45%" },
+  jawa: { left: "25%", top: "70%" },
+  bali: { left: "50%", top: "75%" },
   nusa: { left: "60%", top: "72%" },
 }
 
@@ -47,10 +48,53 @@ function StageCard({ stage, status, index, onClick, attempts }) {
   const isLocked = status === "locked"
   const isCompleted = status === "completed"
 
-  const score = useMemo(() => {
-    if (!attempts || !stage.id) return null
-    return getLatestStoryScore(attempts, stage.id)
-  }, [attempts, stage.id])
+  /* Logic for Label and Value */
+  const { label, value } = useMemo(() => {
+    if (!attempts || !stage.id) return { label: null, value: null }
+
+    // Find latest finished attempt for this stage
+    // attempts is likely an array of objects
+    const stageAttempts = attempts.filter(
+      (a) => (a.storyId === stage.id || a.story?.id === stage.id) && a.finishedAt
+    )
+    if (stageAttempts.length === 0) return { label: null, value: null }
+
+    // Sort by finishedAt desc
+    const latest = stageAttempts.sort(
+      (a, b) => new Date(b.finishedAt) - new Date(a.finishedAt)
+    )[0]
+
+    const lowerTitle = stage.title.toLowerCase()
+    const isTest = lowerTitle.includes("pre-test") || lowerTitle.includes("post-test")
+
+    if (isTest) {
+      // Test: Show Score
+      const score = lowerTitle.includes("pre")
+        ? latest.preTestScore
+        : latest.postTestScore
+
+      return {
+        label: "Nilai Terakhir",
+        value: score !== undefined && score !== null ? Math.round(score) : null
+      }
+    } else {
+      // Story/Game: Show XP
+      // If Static (no calculation), default to 100
+      // Check if it's static via API type or known static islands
+      let xp = latest.totalXpGained
+
+      // Fallback for Static Stories (e.g. Jawa/Papua) that might have 0 XP recorded
+      // Assuming if it's finished and XP is 0/null, it's 100 for static content
+      if (!xp && (stage.apiStageType === "STATIC" || !stage.apiStageType)) {
+        xp = 100
+      }
+
+      return {
+        label: "XP Terakhir",
+        value: xp !== undefined && xp !== null ? xp : 0
+      }
+    }
+  }, [attempts, stage])
 
   return (
     <div
@@ -67,11 +111,22 @@ function StageCard({ stage, status, index, onClick, attempts }) {
 
       <div className='stage-content'>
         <p className='stage-title'>{stage.title}</p>
-        <div className='stage-order'>Tahap {index + 1}</div>
-        {isCompleted && <span className='stage-check'>✓</span>}
+        <div className={`stage-order tahap-${index + 1}`}>
+          Tahap {index + 1}
+        </div>
+        {isCompleted && (
+          <div className='stage-check'>
+            <Check size={18} strokeWidth={3} color='#ffffff' />
+          </div>
+        )}
+        {status === "resume" && (
+          <button className='resume-btn'>Lanjutkan</button>
+        )}
       </div>
-      {score !== null && (
-        <div className='stage-score-badge'>Nilai Terakhir: {score}</div>
+      {value !== null && label && (
+        <div className='stage-score-badge'>
+          {label}: {value}
+        </div>
       )}
 
       {isLocked && (
@@ -218,7 +273,7 @@ export default function Home() {
       {/* HEADER */}
       <div className='header'>
         <div className='completedStories'>
-          <h1>Cerita Selesai: {progressData?.completedStory}</h1>
+          <h1>Tahap Selesai: {progressData?.completedStory}</h1>
         </div>
 
         <div className='gameName'>
@@ -318,6 +373,16 @@ export default function Home() {
           alt='wave2'
           className='wave wave9'
         />
+        <img
+          src='/assets/budayana/islands/wave1.png'
+          alt='wave2'
+          className='wave wave10'
+        />
+        <img
+          src='/assets/budayana/islands/wave2.png'
+          alt='wave2'
+          className='wave wave11'
+        />
 
         {/* Animals */}
         <img
@@ -332,11 +397,11 @@ export default function Home() {
         />
 
         {/* Character */}
-        <img
+        {/* <img
           src='/assets/budayana/islands/bocah.png'
           alt='bocah'
           className='bocah'
-        />
+        /> */}
       </div>
 
       {/* POPUP */}
@@ -365,7 +430,28 @@ function IslandPopup({ activeIsland, onClose }) {
 
   const handleStageClick = (stage, status) => {
     if (status === "locked") return
-    navigate(stage.route)
+
+    let finalRoute = stage.route
+
+    // If resuming, try to find last read page from localStorage
+    if (status === "resume") {
+      try {
+        const storageKey = `budayana_story_${stage.id}_pagesRead`
+        const savedPages = localStorage.getItem(storageKey)
+
+        if (savedPages) {
+          const pages = JSON.parse(savedPages)
+          if (Array.isArray(pages) && pages.length > 0) {
+            const lastPage = Math.max(...pages)
+            finalRoute = `${finalRoute}?page=${lastPage}`
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to retrieve resume position", e)
+      }
+    }
+
+    navigate(finalRoute)
   }
 
   // Helper to map API stories to stage cards
@@ -424,7 +510,11 @@ function IslandPopup({ activeIsland, onClose }) {
     const status = storyUnlockStatus[stageId]
     if (!status) return "locked"
     if (status.isFinished) return "completed"
-    if (status.isUnlocked) return "unlocked"
+    if (status.isUnlocked) {
+      // If started but not finished, it's resume
+      if (status.isStarted) return "resume"
+      return "unlocked"
+    }
     return "locked"
   }
 
@@ -432,6 +522,12 @@ function IslandPopup({ activeIsland, onClose }) {
   const completedCount = useMemo(() => {
     return Object.values(storyUnlockStatus).filter((s) => s.isUnlocked).length
   }, [storyUnlockStatus])
+
+  // Calculate total finished attempts for this island
+  const totalFinishedAttempts = useMemo(() => {
+    if (!attempts?.items) return 0
+    return attempts.items.filter((a) => a.finishedAt).length
+  }, [attempts])
 
   const isLoading = isIslandLoading
 
@@ -455,7 +551,7 @@ function IslandPopup({ activeIsland, onClose }) {
 
             {/* Cycle Count */}
             <div className='popup-cycle-count'>
-              Percobaan : {cyclesData?.cycleCount || 0}
+              Percobaan : {totalFinishedAttempts}
             </div>
 
             {/* Title */}

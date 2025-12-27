@@ -47,11 +47,11 @@ export default function SignIn() {
             try {
               await initializeProgress.mutateAsync()
 
-              // Force logout so user has to login manually as requested
-              await authClient.signOut()
+              // Directly redirect to home instead of forcing logout
+              // await authClient.signOut() 
 
               setPopupType("success")
-              setPopupMessage("Pendaftaran berhasil! Silakan masuk ya.")
+              setPopupMessage("Pendaftaran berhasil! Selamat datang.")
               setPopupOpen(true)
             } catch (e) {
               console.warn("Progress initialization failed:", e)
@@ -59,9 +59,15 @@ export default function SignIn() {
           },
           onError: () => {
             setPopupType("error")
-            setPopupMessage(
-              error.message || "Terjadi kesalahan koneksi ke server."
-            )
+            let msg = error.message || "Terjadi kesalahan koneksi ke server."
+
+            // Check for duplicate/conflict errors
+            const lowerMsg = msg.toLowerCase()
+            if (lowerMsg.includes("email") && (lowerMsg.includes("already") || lowerMsg.includes("exist") || lowerMsg.includes("use"))) {
+              msg = "Email ini sudah digunakan. Mohon gunakan email lain."
+            }
+
+            setPopupMessage(msg)
             setPopupOpen(true)
           },
         }
@@ -241,7 +247,7 @@ export default function SignIn() {
         onClose={() => {
           setPopupOpen(false)
           if (popupType === "success") {
-            navigate("/login")
+            navigate("/")
           }
         }}
       />

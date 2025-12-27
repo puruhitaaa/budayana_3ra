@@ -114,7 +114,7 @@ export function isStoryFinished(attempts, storyId) {
   if (!attempts?.length || !storyId) return false
 
   return attempts.some(
-    (attempt) => attempt.storyId === storyId && attempt.finishedAt !== null
+    (attempt) => String(attempt.storyId) === String(storyId) && attempt.finishedAt !== null
   )
 }
 
@@ -138,10 +138,12 @@ export function getStoryUnlockStatus(stories, attempts) {
 
   sortedStories.forEach((story, index) => {
     const isFinished = isStoryFinished(attempts, story.id)
+    // Check if story has any attempt (started)
+    const isStarted = attempts?.some((a) => String(a.storyId) === String(story.id))
 
     // First story is always unlocked
     if (index === 0) {
-      statusMap[story.id] = { isUnlocked: true, isFinished }
+      statusMap[story.id] = { isUnlocked: true, isFinished, isStarted }
       return
     }
 
@@ -149,7 +151,7 @@ export function getStoryUnlockStatus(stories, attempts) {
     const previousStory = sortedStories[index - 1]
     const previousFinished = isStoryFinished(attempts, previousStory.id)
 
-    statusMap[story.id] = { isUnlocked: previousFinished, isFinished }
+    statusMap[story.id] = { isUnlocked: previousFinished, isFinished, isStarted }
   })
 
   return statusMap

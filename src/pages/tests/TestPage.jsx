@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { useParams, useNavigate, useSearchParams } from "react-router-dom"
 import { ArrowLeft, ArrowRight, Clock } from "lucide-react"
 import { getIslandBySlug } from "../../data/islands"
@@ -88,11 +88,26 @@ export default function TestPage({ testType = "pre" }) {
   const contentBg = theme?.contentBg || "#f2f7ff"
 
   // Timer - calculates elapsed time from attempt's startedAt timestamp
+  // Timer Logic
+  const startTimeRef = useRef(null)
+
   useEffect(() => {
-    if (showResults || !attemptStartedAt) return
+    // Initialize start time when questions are loaded
+    if (questions.length > 0 && !startTimeRef.current && !showResults) {
+      startTimeRef.current = Date.now()
+    }
+  }, [questions, showResults])
+
+  useEffect(() => {
+    if (showResults || questions.length === 0) return
+
+    // Ensure we have a start time
+    if (!startTimeRef.current) {
+      startTimeRef.current = Date.now()
+    }
 
     const calculateElapsed = () => {
-      const startTime = new Date(attemptStartedAt).getTime()
+      const startTime = startTimeRef.current
       const now = Date.now()
       const elapsedSeconds = Math.floor((now - startTime) / 1000)
       setTimeElapsed(Math.max(0, elapsedSeconds))
@@ -104,7 +119,7 @@ export default function TestPage({ testType = "pre" }) {
     // Then update every second
     const timer = setInterval(calculateElapsed, 1000)
     return () => clearInterval(timer)
-  }, [showResults, attemptStartedAt])
+  }, [showResults, questions])
 
   // Start attempt when page loads and storyId is available
   // Skip if we're in result mode (user is viewing results, not taking test)
@@ -116,6 +131,13 @@ export default function TestPage({ testType = "pre" }) {
         onSuccess: (data) => {
           setAttemptId(data.id)
           setAttemptStartedAt(data.startedAt) // Capture startedAt from API response
+
+          // Initialize timer with saved duration if resuming
+          if (data.totalTimeSeconds) {
+            const savedDuration = data.totalTimeSeconds * 1000
+            startTimeRef.current = Date.now() - savedDuration
+            setTimeElapsed(data.totalTimeSeconds)
+          }
 
           // Restore previous answers from questionLogs if they exist
           if (
@@ -310,7 +332,7 @@ export default function TestPage({ testType = "pre" }) {
           stageData: {
             stageType: stageType,
             timeSpentSeconds: timeElapsed,
-            xpGained: Math.floor((correct / questions.length) * 50),
+            xpGained: 0,
           },
         })
 
@@ -320,6 +342,8 @@ export default function TestPage({ testType = "pre" }) {
           data: {
             finishedAt: new Date().toISOString(),
             totalTimeSeconds: timeElapsed,
+            totalXpGained: 0,
+            [testType === "pre" ? "preTestScore" : "postTestScore"]: localScore,
           },
         })
       } catch (error) {
@@ -348,7 +372,7 @@ export default function TestPage({ testType = "pre" }) {
         await updateAttempt.mutateAsync({
           attemptId,
           data: {
-            finishedAt: new Date().toISOString(),
+            // finishedAt: new Date().toISOString(), // removed to prevent premature finishing
             totalTimeSeconds: timeElapsed,
           },
         })
@@ -468,7 +492,7 @@ export default function TestPage({ testType = "pre" }) {
                   Nilai
                 </span>
                 <span className='text-[#2c2c2c] font-black text-3xl md:text-4xl'>
-                  {Math.round(score)}
+                  {Math.round(score)}/100
                 </span>
               </div>
             </div>
@@ -623,8 +647,7 @@ export default function TestPage({ testType = "pre" }) {
             />
 
             <p className='text-lg font-semibold text-[#2f2f2f] leading-relaxed mb-6'>
-              Jangan pergi dulu! Progresmu di tahap ini akan hilang kalau kamu
-              berhenti sekarang.
+              Kamu yakin mau keluar?
             </p>
 
             <button
@@ -639,7 +662,7 @@ export default function TestPage({ testType = "pre" }) {
               disabled={isSubmitting}
               className={`font-bold ${isSubmitting ? "text-gray-400" : "text-[#e64c45]"}`}
             >
-              {isSubmitting ? "Mengakhiri..." : "Akhiri Sesi"}
+              {isSubmitting ? "Mengakhiri..." : "Keluar"}
             </button>
           </div>
         </div>
