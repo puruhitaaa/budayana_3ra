@@ -61,7 +61,7 @@ export const games = {
         page: 10,
         type: "drag",
         items: [
-          { id: "search", label: "Anak-anak ketakutan" },
+          { id: "search", label: "Anak-anak berlari ketakutan" },
           { id: "play", label: "Anak-anak bermain di ladang" },
           { id: "home", label: "Warga mencari anak-anak" },
           { id: "appear", label: "Nenek Pakande muncul" },

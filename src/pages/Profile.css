@@ -93,12 +93,15 @@
 }
 
 .profile-form {
+  margin-left: 20px;
+  margin-right: 20px;
   width: 100%;
-  max-width: 800px;
+  max-width: 1000px;
   /* Fluid max width */
   display: flex;
   flex-direction: column;
   gap: 16px;
+
 }
 
 .profile-field {

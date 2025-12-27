@@ -140,6 +140,13 @@ export default function StoryPage() {
         onSuccess: (data) => {
           setAttemptId(data.id)
           setAttemptStartedAt(data.startedAt)
+
+          // Resume timer if existing progress
+          if (data.totalTimeSeconds) {
+            const savedDuration = data.totalTimeSeconds * 1000
+            startTimeRef.current = Date.now() - savedDuration
+            setTimeElapsed(data.totalTimeSeconds)
+          }
         },
         onError: (err) => console.error("Failed to start attempt", err),
       })
@@ -148,11 +155,25 @@ export default function StoryPage() {
   }, [storyId, attemptId, story])
 
   // Timer Logic
+  // Timer Logic
+  const startTimeRef = useRef(null)
+
   useEffect(() => {
-    if (!timerRunning || !attemptStartedAt) return
+    // Initialize start time when story is loaded
+    if (story && !startTimeRef.current) {
+      startTimeRef.current = Date.now()
+    }
+  }, [story])
+
+  useEffect(() => {
+    if (!timerRunning || !story) return
+
+    if (!startTimeRef.current) {
+      startTimeRef.current = Date.now()
+    }
 
     const calculateElapsed = () => {
-      const startTime = new Date(attemptStartedAt).getTime()
+      const startTime = startTimeRef.current
       const now = Date.now()
       const elapsedSeconds = Math.floor(
         ((max) => (max > 0 ? max : 0))((now - startTime) / 1000)
@@ -163,7 +184,7 @@ export default function StoryPage() {
     calculateElapsed()
     const t = setInterval(calculateElapsed, 1000)
     return () => clearInterval(t)
-  }, [timerRunning, attemptStartedAt])
+  }, [timerRunning, story])
 
   // Handle window resize for responsiveness
   useEffect(() => {
@@ -305,7 +326,7 @@ export default function StoryPage() {
         await updateAttempt.mutateAsync({
           attemptId,
           data: {
-            finishedAt: new Date().toISOString(),
+            // finishedAt: new Date().toISOString(), // removed to prevent premature finishing
             totalTimeSeconds: timeElapsed,
           },
         })
@@ -438,7 +459,7 @@ export default function StoryPage() {
             onClick={() => setShowExitWarning(true)}
             className='px-5 py-2.5 bg-white/90 backdrop-blur-sm border-2 border-[#2c2c2c] flex items-center gap-2 rounded-full shadow-md hover:bg-white hover:scale-105 transition-all font-semibold text-sm md:text-base'
           >
-            <ArrowLeft size={18} /> Kembali
+            <ArrowLeft size={18} /> Keluar
           </button>
         </div>
         <div className='flex justify-center'>
