@@ -48,7 +48,7 @@ export default function SignIn() {
               await initializeProgress.mutateAsync()
 
               // Directly redirect to home instead of forcing logout
-              // await authClient.signOut() 
+              // await authClient.signOut()
 
               setPopupType("success")
               setPopupMessage("Pendaftaran berhasil! Selamat datang.")
@@ -63,7 +63,12 @@ export default function SignIn() {
 
             // Check for duplicate/conflict errors
             const lowerMsg = msg.toLowerCase()
-            if (lowerMsg.includes("email") && (lowerMsg.includes("already") || lowerMsg.includes("exist") || lowerMsg.includes("use"))) {
+            if (
+              lowerMsg.includes("email") &&
+              (lowerMsg.includes("already") ||
+                lowerMsg.includes("exist") ||
+                lowerMsg.includes("use"))
+            ) {
               msg = "Email ini sudah digunakan. Mohon gunakan email lain."
             }
 
@@ -168,7 +173,7 @@ export default function SignIn() {
               <input
                 type={showPassword ? "text" : "password"}
                 id='password'
-                placeholder=' Password Kamu (6+ karakter)'
+                placeholder=' Password Kamu (minimal 8 karakter)'
                 required
                 minLength='6'
                 value={passwordValue}
@@ -212,7 +217,10 @@ export default function SignIn() {
 
       <div className='background'>
         <div className='grass'>
-          <img className='rumput' src='/assets/budayana/islands/Rumput.png'></img>
+          <img
+            className='rumput'
+            src='/assets/budayana/islands/Rumput.png'
+          ></img>
         </div>
 
         <div className='animals'>
