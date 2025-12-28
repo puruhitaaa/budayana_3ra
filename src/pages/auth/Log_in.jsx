@@ -93,7 +93,7 @@ export default function Login() {
               <input
                 type={showPassword ? "text" : "password"}
                 id='password'
-                placeholder=' Password Kamu (6+ karakter)'
+                placeholder=' Password Kamu (minimal 8 karakter)'
                 required
                 minLength='6'
                 value={passwordValue}
