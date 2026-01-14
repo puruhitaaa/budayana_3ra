@@ -28,12 +28,10 @@ body {
     z-index: 100;
     padding: 18px 30px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    /* Subtle shadow for depth */
 }
 
 .header_landing img {
     height: 50px;
-    /* Reduced from 60px */
     width: auto;
     object-fit: contain;
     cursor: pointer;
@@ -47,20 +45,17 @@ body {
     color: #955C2E;
     font-weight: 700;
     font-size: 1.2rem;
-    /* Adjusted for better proportion */
     font-family: 'Fredoka', sans-serif;
 }
 
 .header_opt p {
     margin: 0;
-    /* Remove default margins */
     transition: color 0.3s ease;
 }
 
 .header_opt p:hover {
     color: #7a4b26;
     text-decoration: none;
-    /* Modern look usually avoids underline unless link */
     cursor: pointer;
 }
 
@@ -95,15 +90,15 @@ body {
     height: auto;
     left: -15%;
     z-index: -3;
-    top: 4%;
-    /* Moved upper as requested */
+    top: 3%;
 }
 
+/* Background Green - Desktop */
 .bg_green {
     position: absolute;
     width: 100vw;
     z-index: -2;
-    top: 13%;
+    top: 12%;
 }
 
 .bg_green img {
@@ -111,16 +106,22 @@ body {
     height: auto;
 }
 
+.bg_green_mobile {
+    display: none;
+}
+
+.bg_green_desktop {
+    display: block;
+}
+
 .hero {
     display: flex;
     justify-content: space-around;
     align-items: center;
-    
 }
 
 .hero_img {
     width: 100%;
-
 }
 
 .hero_img img {
@@ -128,10 +129,11 @@ body {
     height: auto;
     padding-left: 90px;
     padding-right: 20px;
+    margin-top: 170px;
 }
 
 .hero_text {
-    padding-bottom: 25%;
+    padding-bottom: 11%;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -141,41 +143,30 @@ body {
 
 .hero_text img {
     width: 400px;
-    /* Increased size */
     max-width: 1000px;
     height: auto;
-    margin-bottom: 10px;
-    /* Reduced from 60px to bring text closer */
+    margin-bottom: 15px;
 }
 
 .hero_text h1 {
     font-family: 'Fredoka', sans-serif;
     font-weight: 700;
-    /* Bold */
     width: 100%;
     color: #955C2E;
-    /* Equal to login button color */
     margin-top: 5px;
-    /* Close to image */
     margin-bottom: 30px;
-    /* Space before button */
     line-height: 1.2;
     font-size: 1.5rem;
 }
 
 .about_us {
     top: 150%;
-    /* Moved down */
     margin: 50px auto;
-    /* Centered container */
     display: flex;
     justify-content: center;
-    /* Centered content */
     gap: 80px;
-    /* Gap between text and image */
     align-items: center;
     padding-top: 190px;
-    /* More spacing */
     max-width: 1200px;
 }
 
@@ -183,7 +174,6 @@ body {
     font-family: 'Fredoka', sans-serif;
     font-weight: 600;
     width: 80%;
-    /* Full width in container */
     font-size: 4rem;
     color: #ffffff;
     margin-top: 15px;
@@ -198,17 +188,13 @@ body {
     margin-top: 15px;
     margin-bottom: 30px;
     font-size: 1.5rem;
-    /* Increased font size */
     line-height: 1.6;
 }
 
 .about_us img {
     width: 45%;
-    /* Increased width */
     margin-right: 0;
-    /* Removed margin since we use gap */
 }
-
 
 .features {
     display: flex;
@@ -226,7 +212,6 @@ body {
     margin-top: 100px;
 }
 
-
 .features_title {
     font-family: "Fredoka", sans-serif;
     font-weight: 700;
@@ -234,25 +219,32 @@ body {
     background-color: #955C2E;
     color: #ffffff;
     border-radius: 20px;
-
     padding: 16px 56px;
     max-width: 420px;
     width: auto;
-
     margin: 0 auto;
 }
 
-
-
+/* Background Brown - Desktop */
 .bg_brown {
     position: absolute;
     width: 100vw;
-    z-index: -2;
+    z-index: -15;
+    bottom: 05;
+    left: 0;
 }
 
 .bg_brown img {
     width: 100%;
     height: auto;
+}
+
+.bg_brown_mobile {
+    display: none;
+}
+
+.bg_brown_desktop {
+    display: block;
 }
 
 .contact {
@@ -287,5 +279,222 @@ body {
     align-self: center;
     gap: 20px;
     margin-top: 50px;
+}
 
+
+
+
+
+
+/* ========== MOBILE RESPONSIVENESS ========== */
+@media (max-width: 768px) {
+    .header_landing {
+        display: none;
+    }
+
+    .landing_child {
+        margin-top: 115px;
+        overflow-x: hidden;
+    }
+
+    /* Prambanan background positioning */
+    .prambanan {
+        position: absolute;
+        width: 120%;
+        left: -20%;
+        top: 12%;
+    }
+
+    .prambanan img {
+        width: 100%;
+        height: auto;
+        position: relative;
+        left: -10%;
+    }
+
+    /* Background Green - Mobile */
+    .bg_green {
+        top: 555px;
+    }
+    
+    .bg_green_desktop {
+        display: none;
+    }
+    
+    .bg_green_mobile {
+        display: block;
+        width: 100%;
+        transform: none;
+    }
+
+    /* Background Brown - Mobile */
+    .bg_brown {
+        bottom: 0;
+        left: 0;
+    }
+    
+    .bg_brown_desktop {
+        display: none;
+    }
+    
+    .bg_brown_mobile {
+        display: block;
+        width: 100%;
+        transform: none;
+    }
+
+    /* Hero Section - Text on Top, Image Below */
+    .hero {
+        flex-direction: column;
+        gap: 0;
+        padding: 0 20px;
+        margin-top: 20px;
+    }
+
+    .hero_text {
+        order: 1;
+        padding-bottom: 0;
+        margin-right: 0;
+        width: 100%;
+        margin-bottom: 10px;
+    }
+
+    .hero_text img {
+        width: 90%;
+        max-width: 350px;
+    }
+
+    .hero_text h1 {
+        font-size: 1.2rem;
+        margin-top: 12px;
+        margin-bottom: 20px;
+    }
+
+    .hero_text .sub_title {
+        font-size: 1.3rem;
+    }
+
+    .hero_text .btn_login {
+        padding: 10px 28px;
+        font-size: 1rem;
+    }
+
+    .hero_img {
+        order: 2;
+        width: 150%;
+        display: flex;
+        justify-content: center;
+        margin-top: 45px;
+    }
+
+    .hero_img img {
+        padding: 0;
+        width: 100%;
+        max-width: 400px;
+        margin-top: 180px;
+    }
+
+    /* About Us Section */
+    .about_us {
+        flex-direction: column;
+        top: 0;
+        margin-top: 80px;
+        padding-top: 80px;
+        gap: 30px;
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+
+    .about_us_text {
+        order: 1;
+        padding: 0;
+        width: 70%;
+    }
+
+    .about_us h1 {
+        font-size: 3rem;
+        width: 110%;
+        text-align: left;
+        margin-top: 70px;
+    }
+
+    .about_us p {
+        font-size: 1rem;
+        text-align: left;
+        width: 100%;
+        line-height: 1.6;
+        margin-bottom: 15px;
+    }
+
+    .about_us img {
+        order: 2;
+        width: 55%;
+        max-width: 250px;
+        margin-bottom: 15px;
+        margin-right: -40%;
+    }
+
+    /* Features Section */
+    .features {
+        margin: 120px auto 50px;
+        padding: 0 20px;
+    }
+
+    .features_text {
+        margin-top: 0;
+        gap: 30px;
+    }
+
+    .features_title {
+        font-size: 1.5rem;
+        padding: 12px 32px;
+        max-width: 100%;
+        margin-top: 95px;
+    }
+
+    .features_items {
+        width: 100%;
+    }
+
+    .features_items img {
+        width: 120%;
+        max-width: 500px;
+        margin-left: -10%;
+    }
+
+    /* Contact Section */
+    .contact {
+        margin: 50px 20px;
+        margin-top: 25%;
+        text-align: left;
+    }
+
+    .contact h1 {
+        font-size: 2.5rem;
+        width: 100%;
+        text-align: left;
+        margin-bottom: 15px;
+    }
+
+    .contact p {
+        width: 100%;
+        font-size: 1rem;
+        text-align: left;
+        line-height: 1.6;
+        margin-bottom: 15px;
+    }
+
+    .contact_text_3 {
+        justify-content: flex-start;
+        margin-top: 30px;
+    }
+
+    .contact_text_3 img {
+        width: 60px;
+        height: 40px;
+    }
+
+    .contact_text_3 p {
+        font-size: 1rem;
+    }
 }
